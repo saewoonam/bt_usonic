@@ -21,9 +21,9 @@
 - Measure time delay of received audio tone
 - Audio tone is simple 1ms duration audio tone at a fixed square wave frequency
 - Things considered:
-    -- sine wave frequency chirps, not enough memory
-    -- sq. wave frequency chirps, x-correlation not good enough
-    -- sigma-delta generated tones
+    - sine wave frequency chirps, not enough memory
+    - sq. wave frequency chirps, x-correlation not good enough
+    - sigma-delta generated tones
 
 
 
