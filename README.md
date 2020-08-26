@@ -46,7 +46,7 @@
     - distance from right speaker: 1
     - IRQ for right distance: 1
     - number of good distance measures: 1
-    - RSSI values: 20
+    - RSSI values: 16
     - Encounter ID: 32
 
 

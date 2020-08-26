@@ -240,13 +240,17 @@ static void send_spp_data() {
 void linkPRS() {
 	//if (_role == ROLE_CLIENT_MASTER) {
 	if (_role == ROLE_SERVER_SLAVE) {
+		// setup speaker
 		PRS_SourceAsyncSignalSet(TX_OBS_PRS_CHANNEL,
 								 PRS_ASYNC_CH_CTRL_SOURCESEL_MODEM,
 								 _PRS_ASYNC_CH_CTRL_SIGSEL_MODEMFRAMESENT);
 	} else {
+		// setup microphone
 		PRS_SourceAsyncSignalSet(RX_OBS_PRS_CHANNEL,
 								 PRS_ASYNC_CH_CTRL_SOURCESEL_MODEML,
 								 _PRS_ASYNC_CH_CTRL_SIGSEL_MODEMLFRAMEDET);
+		pdm_start();
+		pdm_on = true;
 	}
 }
 
@@ -535,8 +539,8 @@ void spp_client_main(void) {
 				printLog("SPP Mode ON\r\n");
 				SLEEP_SleepBlockBegin(sleepEM2); // Disable sleeping when SPP mode active
 		        linkPRS();
-				pdm_start();
-				pdm_on = true;
+				// pdm_start();
+				// pdm_on = true;
 				sharedCount = 0;
 				send_spp_data_client();
 
@@ -615,8 +619,8 @@ void spp_client_main(void) {
 						SLEEP_SleepBlockBegin(sleepEM2); // Disable sleeping
 						printLog("SPP Mode ON\r\n");
 				        linkPRS();
-						pdm_start();
-						pdm_on = true;
+						// pdm_start();
+						// pdm_on = true;
 					} else {
 						printLog("SPP Mode OFF\r\n");
 						_main_state = STATE_CONNECTED;
