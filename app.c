@@ -39,6 +39,7 @@ extern bool recording;
 void initPDM(void);
 void startLDMA_PDM(void);
 void init_speaker(void);
+void adcInit(void);
 
 void initTIMER0(void) {
 	// Enable clock for TIMER0 module
@@ -155,6 +156,7 @@ void appMain(gecko_configuration_t *pconfig) {
 	initTimers();
 	initPDM();
 	init_speaker();
+	adcInit();
 
 	/* Initialize stack */
 	gecko_init(pconfig);

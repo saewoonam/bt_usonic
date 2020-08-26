@@ -1,5 +1,7 @@
-spp_client_main.o: ../spp_client_main.c ../ble-configuration.h \
- ../board_features.h \
+spp_client_main.o: ../spp_client_main.c \
+ /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/crypto_and_time/monocypher.h \
+ /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/crypto_and_time/x25519-cortex-m4.h \
+ ../ble-configuration.h ../board_features.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/protocol/bluetooth/ble_stack/inc/common/bg_types.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/protocol/bluetooth/ble_stack/inc/soc/native_gecko.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hal-config.h \
@@ -79,7 +81,12 @@ spp_client_main.o: ../spp_client_main.c ../ble-configuration.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_usart.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_rtcc.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_prs.h \
- /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_gpio.h
+ /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_gpio.h \
+ ../encounter/encounter.h
+
+/Users/nams/SimplicityStudio/v4_workspace/bt-usonic/crypto_and_time/monocypher.h:
+
+/Users/nams/SimplicityStudio/v4_workspace/bt-usonic/crypto_and_time/x25519-cortex-m4.h:
 
 ../ble-configuration.h:
 
@@ -246,3 +253,5 @@ spp_client_main.o: ../spp_client_main.c ../ble-configuration.h \
 /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_prs.h:
 
 /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_gpio.h:
+
+../encounter/encounter.h:

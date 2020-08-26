@@ -6,4 +6,7 @@ Executing: bgbuild (/Applications/Simplicity Studio.app/Contents/Eclipse/develop
 Standard output
 ALL OK
 
+Error/Warning output
+WARNING: fec26ec46d7144429f8155bc21d658d6 max length attribute is 255 but actual value length is 1. 255 will be used.
+
 

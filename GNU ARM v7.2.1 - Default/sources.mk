@@ -18,6 +18,7 @@ C_DEPS :=
 SUBDIRS := \
 app/bluetooth/common/util \
 . \
+crypto_and_time \
 hardware/kit/common/bsp \
 hardware/kit/common/drivers \
 platform/Device/SiliconLabs/EFR32MG22/Source/GCC \

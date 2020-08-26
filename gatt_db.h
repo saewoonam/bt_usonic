@@ -17,7 +17,12 @@ extern const struct bg_gattdb_def bg_gattdb_data;
 #define gattdb_database_hash                    6
 #define gattdb_client_support_features          8
 #define gattdb_device_name                     11
-#define gattdb_ota_control                     23
-#define gattdb_gatt_spp_data                   26
+#define gattdb_data_in                         16
+#define gattdb_count                           18
+#define gattdb_Read_Write                      20
+#define gattdb_gatt_spp_data                   22
+#define gattdb_battery_level                   25
+#define gattdb_characteristic_presentation_format         26
+#define gattdb_ota_control                     37
 
 #endif

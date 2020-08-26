@@ -12,6 +12,8 @@
  **************************************************************************************************/
 
 /* Board headers */
+#include <crypto_and_time/monocypher.h>
+#include <crypto_and_time/x25519-cortex-m4.h>
 #include "ble-configuration.h"
 #include "board_features.h"
 
@@ -27,6 +29,9 @@
 #include "em_usart.h"
 #include "em_rtcc.h"
 #include "em_prs.h"
+
+#include "encounter/encounter.h"
+
 
 /***************************************************************************************************
  Local Macros and Definitions
@@ -46,8 +51,13 @@
 #define ROLE_SERVER_SLAVE 1
 
 // SPP service UUID: 4880c12c-fdcb-4077-8920-a450d7f9b907
-const uint8 serviceUUID[16] = { 0x07, 0xb9, 0xf9, 0xd7, 0x50, 0xa4, 0x20, 0x89,
-		0x77, 0x40, 0xcb, 0xfd, 0x2c, 0xc1, 0x80, 0x48 };
+
+//const uint8 serviceUUID[16] = { 0x07, 0xb9, 0xf9, 0xd7, 0x50, 0xa4, 0x20, 0x89,
+//		0x77, 0x40, 0xcb, 0xfd, 0x2c, 0xc1, 0x80, 0x48 };
+
+// encounter service UUID: 7b183224-9168-443e-a927-7aeea07e8105
+const uint8 serviceUUID[16] = { 0x05, 0x81, 0x7E, 0xA0, 0xEE, 0x7A, 0x27, 0xA9,
+		0x3E, 0x44, 0x68, 0x91, 0x24, 0x32, 0x18, 0x7B };
 
 // SPP data UUID: fec26ec4-6d71-4442-9f81-55bc21d658d6
 const uint8 charUUID[16] = { 0xd6, 0x58, 0xd6, 0x21, 0xbc, 0x55, 0x81, 0x9f,
@@ -99,11 +109,29 @@ void setup_k() {
 	}
 
 }
+/***************************************************************************************************
+ Global Variables
+ **************************************************************************************************/
+
+// encounter related
+uint32_t encounter_count = 0;
+Encounter_record_v2 encounters[IDX_MASK+1];
+uint32_t c_fifo_last_idx=0;
+uint32_t p_fifo_last_idx=0;
+
+// storage related
+bool write_flash = false;
+
+// bt connection
+uint8 _conn_handle = 0xFF;
+uint8 _max_packet_size = 20;
+uint8 _min_packet_size = 20;  // Target minimum bytes for one packet
+
 
 /***************************************************************************************************
  Local Variables
  **************************************************************************************************/
-static uint8 _conn_handle = 0xFF;
+//bt connection state
 static int _main_state;
 static uint32 _service_handle;
 static uint16 _char_handle;
@@ -111,10 +139,10 @@ static uint16 _char_handle;
 static int8 _role = ROLE_UNKNOWN;
 /* Default maximum packet size is 20 bytes. This is adjusted after connection is opened based
  * on the connection parameters */
-static uint8 _max_packet_size = 20;
-static uint8 _min_packet_size = 20;  // Target minimum bytes for one packet
 
 volatile int conn_interval = 400;
+
+
 static void reset_variables() {
 	_conn_handle = 0xFF;
 	_main_state = DISCONNECTED;
