@@ -24,6 +24,29 @@
     - sine wave frequency chirps, not enough memory
     - sq. wave frequency chirps, x-correlation not good enough
     - sigma-delta generated tones
+- signal processing on the receiver / microphone side
+    - high pass filter with 10 kHz cutoff
+    - X-correlation
+    - take absolute value of x-correlation
+    - low pass filter at 1kHz of abs(corr)... this effectively averages/smooths
+    - find largest peak
+    - look for peaks earlier than largest peak to handle possible strong
+      reflections
 
+## ToDo
+- new exposure notification with this scheme
+- exchange key material initial part of connection
+- new advertising packet
+- new storage structure
+    - time: 4
+    - MAC: 6
+    - version: 1
+    - distance from left speaker: 1
+    - IRQ for left distance: 1
+    - distance from right speaker: 1
+    - IRQ for right distance: 1
+    - number of good distance measures: 1
+    - RSSI values: 20
+    - Encounter ID: 32
 
 
