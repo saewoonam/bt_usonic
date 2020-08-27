@@ -88,6 +88,7 @@ void pdm_pause(void);
 void populateBuffers(int k_value);
 void startDMADRV_TMR(void);
 
+void update_public_key(void);
 
 bool pdm_on = false;
 
@@ -126,7 +127,9 @@ bool write_flash = false;
 uint8 _conn_handle = 0xFF;
 uint8 _max_packet_size = 20;
 uint8 _min_packet_size = 20;  // Target minimum bytes for one packet
+uint8_t local_mac[6];
 
+extern uint8_t public_key[32];
 
 /***************************************************************************************************
  Local Variables
@@ -137,10 +140,12 @@ static uint32 _service_handle;
 static uint16 _char_handle;
 
 static int8 _role = ROLE_UNKNOWN;
+uint8_t local_mac[6];
 /* Default maximum packet size is 20 bytes. This is adjusted after connection is opened based
  * on the connection parameters */
 
 volatile int conn_interval = 400;
+Encounter_record_v2 *current_encounter = encounters;
 
 
 static void reset_variables() {
@@ -156,87 +161,31 @@ static void reset_variables() {
 	memset(right_t, 0, 32*2);
 }
 
-static bool compare_mac(uint8_t* addr) {
-	bd_addr local_addr;
-	local_addr = gecko_cmd_system_get_bt_address()->address;
-	uint32_t* l = (uint32_t *)(local_addr.addr);
-	uint32_t* r = (uint32_t *) addr;
-
-//	for (int i = 0; i < 6; i++) {
-//		printLog("%2x ", addr[i]);
-//	}
-//	printLog("local address: ");
-//				for (i = 0; i < 5; i++) {
-//					printLog("%2.2x:", local_addr.addr[5 - i]);
-//				}
-//	printLog("%2.2x\r\n", local_addr.addr[0]);
-//    printLog("\r\n");
-    // printLog("%lu, %lu\r\n", *l, *r);
-//	if (*l > *r) {
-	if (*l < *r) {
-		return 1;
-	}
-	return 0;
-}
-
-static int process_scan_response(
-		struct gecko_msg_le_gap_scan_response_evt_t *pResp) {
-	// Decoding advertising packets is done here. The list of AD types can be found
-	// at: https://www.bluetooth.com/specifications/assigned-numbers/Generic-Access-Profile
-
-	int i = 0;
-	int ad_match_found = 0;
-	int ad_len;
-	int ad_type;
-
-	char name[32];
-
-    char dev_name[]="Empty Ex";
-    printLog("Process scan\r\n");
-	while (i < (pResp->data.len - 1)) {
-
-		ad_len = pResp->data.data[i];
-		ad_type = pResp->data.data[i + 1];
-
-		if (ad_type == 0x08 || ad_type == 0x09) {
-			// Type 0x08 = Shortened Local Name
-			// Type 0x09 = Complete Local Name
-			memcpy(name, &(pResp->data.data[i + 2]), ad_len - 1);
-			name[ad_len - 1] = 0;
-			printLog("found: %s\r\n", name);
-			if (memcmp(dev_name, name, 8)==0)  {
-				printLog("Name match, addr compare: %d\r\n", compare_mac(pResp->address.addr));
-				flushLog();
-			}
-		}
-
-		// 4880c12c-fdcb-4077-8920-a450d7f9b907
-		if (ad_type == 0x06 || ad_type == 0x07) {
-			// Type 0x06 = Incomplete List of 128-bit Service Class UUIDs
-			// Type 0x07 = Complete List of 128-bit Service Class UUIDs
-			if (memcmp(serviceUUID, &(pResp->data.data[i + 2]), 16) == 0) {
-				printLog("Found SPP device\r\n");
-				// ad_match_found = 1;
-				ad_match_found = compare_mac(pResp->address.addr);
-			}
-		}
-
-		// Jump to next AD record
-		i = i + ad_len + 1;
-	}
-	// return 0;
-	printLog("ad_match_found: %d\r\n", ad_match_found);
-	return (ad_match_found);
-}
+// void get_local_mac(void);
+int process_scan_response(
+		struct gecko_msg_le_gap_scan_response_evt_t *pResp);
+void start_adv(void);
+void setup_adv(void);
 
 static void send_spp_data_client() {
 	uint8 len = 1;
 	uint16 result;
+	uint8_t temp[33];
+
+	printLog("send spp data client, got %d\r\n", sharedCount);
+	if (sharedCount==0) {
+		printLog("********send PUBLIC KEY from client\r\n");
+		memcpy(temp+1, public_key, 32);
+		len = 33;
+	}
+
 	sharedCount++;
+
+	temp[0] = sharedCount;
 	// Stack may return "out-of-memory" error if the local buffer is full -> in that case, just keep trying until the command succeeds
 	do {
 		result = gecko_cmd_gatt_write_characteristic_value_without_response(
-				_conn_handle, _char_handle, len, &sharedCount)->result;
+				_conn_handle, _char_handle, len, temp)->result;
 	} while (result == bg_err_out_of_memory);
 
 	if (result != 0) {
@@ -248,20 +197,25 @@ static void send_spp_data_client() {
 static void send_spp_data() {
 	uint8 len = 1;
 	uint16 result;
-
+	uint8_t temp[33];
+	printLog("send spp data, got %d\r\n", sharedCount);
+	if (sharedCount==1) {
+		printLog("Got the first packet from the client, sending: %d\r\n", sharedCount);
+		memcpy(temp+1, public_key, 32);
+		len = 33;
+	}
 	sharedCount++;
-	if (len > 0) {
+	temp[0] = sharedCount;
 		// Stack may return "out-of-memory" error if the local buffer is full -> in that case, just keep trying until the command succeeds
 		do {
 			result = gecko_cmd_gatt_server_send_characteristic_notification(
 					_conn_handle,
-					gattdb_gatt_spp_data, len, &sharedCount)->result;
+					gattdb_gatt_spp_data, len, temp)->result;
 		} while (result == bg_err_out_of_memory);
 
 		if (result != 0) {
 			printLog("Unexpected error: %x\r\n", result);
 		}
-	}
 }
 
 
@@ -420,14 +374,19 @@ void spp_client_main(void) {
 			// ***************
 			reset_variables();
 			gecko_cmd_gatt_set_max_mtu(247);
+			// set initial public key
+			update_public_key();
 
 			// Start discovery using the default 1M PHY
 			// Master_client mode
 			gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic);
 			_main_state = SCAN_ADV;
 			// Server_slave mode
-			gecko_cmd_le_gap_start_advertising(0, le_gap_general_discoverable,
-					le_gap_undirected_connectable);
+			setup_adv();
+			start_adv();
+
+//			gecko_cmd_le_gap_start_advertising(0, le_gap_general_discoverable,
+//					le_gap_undirected_connectable);
 
 			gecko_cmd_hardware_set_soft_timer(32768<<2, HEARTBEAT_TIMER, false);
 
@@ -599,8 +558,13 @@ void spp_client_main(void) {
 					uint32_t t = RTCC_CounterGet();
 					sharedCount =
 							evt->data.evt_gatt_server_attribute_value.value.data[0];
-					printLog("%lu, %lu, MC SC:%3d\r\n", t,
-							t - prev_rtcc, sharedCount);
+					printLog("%lu, %lu, MC SC:%3d  len: %d\r\n", t,
+							t - prev_rtcc, sharedCount,
+							evt->data.evt_gatt_server_attribute_value.value.len);
+					if (sharedCount == 2) {
+						memcpy(current_encounter->public_key, evt->data.evt_gatt_server_attribute_value.value.data+1, 32);
+						printLog("got public key\r\n");
+					}
 					prev_rtcc = t;
 					if (sharedCount>20) {
 						gecko_cmd_le_connection_close(_conn_handle);
@@ -620,8 +584,11 @@ void spp_client_main(void) {
 			case RESTART_TIMER:
 				// Restart discovery using the default 1M PHY
 				gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic);
-				gecko_cmd_le_gap_start_advertising(0, le_gap_general_discoverable,
-						le_gap_undirected_connectable);
+				start_adv();
+
+//				gecko_cmd_le_gap_start_advertising(0, le_gap_general_discoverable,
+//						le_gap_undirected_connectable);
+
 				_main_state = SCAN_ADV;
 				break;
 			case HEARTBEAT_TIMER:
@@ -665,15 +632,15 @@ void spp_client_main(void) {
 				uint32_t t = RTCC_CounterGet();
 				sharedCount =
 						evt->data.evt_gatt_server_attribute_value.value.data[0];
-				printLog("%lu %lu %lu slave server SC: %d\r\n", t,
-						t - prev_rtcc, t-prev_shared_count, sharedCount);
+				printLog("%lu %lu %lu slave server SC: %d len: %d\r\n", t,
+						t - prev_rtcc, t-prev_shared_count, sharedCount,
+						evt->data.evt_gatt_server_attribute_value.value.len);
+				if (sharedCount == 1) {
+					memcpy(current_encounter->public_key, evt->data.evt_gatt_server_attribute_value.value.data+1, 32);
+					printLog("got public key\r\n");
+				}
 				prev_rtcc = t;
 				prev_shared_count = prev_rtcc;
-//				if (sharedCount>20) {
-//					gecko_cmd_le_connection_close(_conn_handle);
-//				} else {
-//					send_spp_data();
-//				}
 				send_spp_data();
 				gecko_cmd_le_connection_get_rssi(_conn_handle);
 			}
