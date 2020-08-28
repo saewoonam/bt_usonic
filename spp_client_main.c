@@ -31,7 +31,7 @@
 #include "em_prs.h"
 
 #include "encounter/encounter.h"
-
+#include "crypto_and_time/crypto.h"
 
 /***************************************************************************************************
  Local Macros and Definitions
@@ -50,6 +50,7 @@
 #define ROLE_CLIENT_MASTER 0
 #define ROLE_SERVER_SLAVE 1
 
+#define RSSI_LIST_SIZE (12)
 // SPP service UUID: 4880c12c-fdcb-4077-8920-a450d7f9b907
 
 //const uint8 serviceUUID[16] = { 0x07, 0xb9, 0xf9, 0xd7, 0x50, 0xa4, 0x20, 0x89,
@@ -81,7 +82,7 @@ int _data_idx = 0;
  * set value to 0 to disable optimization -> minimum latency but may decrease throughput */
 #define UART_POLL_TIMEOUT  5000
 
-void initPDM(void);
+// void initPDM(void);
 void pdm_start(void);
 void pdm_pause(void);
 
@@ -90,12 +91,14 @@ void startDMADRV_TMR(void);
 
 void update_public_key(void);
 
+void setup_encounter_record(uint8_t* mac_addr);
+
 bool pdm_on = false;
 
 int32_t k_goertzel=276;
 int32_t k_speaker = 276;
 float pulse_width = 1.0e-3;
-int out=2;
+int out=0;
 bool distant=false;
 
 void setup_k() {
@@ -146,7 +149,7 @@ uint8_t local_mac[6];
 
 volatile int conn_interval = 400;
 Encounter_record_v2 *current_encounter = encounters;
-
+static int8  _rssi_count = 0;
 
 static void reset_variables() {
 	_conn_handle = 0xFF;
@@ -159,6 +162,7 @@ static void reset_variables() {
 	_data_idx = 0;
 	memset(left_t, 0, 32*2);
 	memset(right_t, 0, 32*2);
+	_rssi_count = 0;
 }
 
 // void get_local_mac(void);
@@ -177,6 +181,16 @@ static void send_spp_data_client() {
 		printLog("********send PUBLIC KEY from client\r\n");
 		memcpy(temp+1, public_key, 32);
 		len = 33;
+	} else {
+		printLog("*******send usound %d\r\n", _data_idx);
+		if (_data_idx > 1) {
+			uint16_t *time_data;
+			time_data = left_t + (_data_idx-2);
+			memcpy(temp+1, (uint8_t *) time_data, 4);
+			time_data = right_t + (_data_idx-2);
+			memcpy(temp+5, (uint8_t *) time_data, 4);
+			len = 9;
+		}
 	}
 
 	sharedCount++;
@@ -315,7 +329,24 @@ void parse_command(uint8_t c) {
 
 int IQR(int16_t* a, int n, int *mid_index);
 
-void print_times(void) {
+void print_encounter(int index) {
+	Encounter_record_v2 *e;
+	e = encounters+index;
+	uint8_t *temp = (uint8_t *) e;
+
+	printLog("encounters[%d]=\r\n", index);
+	for (int j = 0; j < 2; j++) {
+		for (int i = 0; i < 32; i++) {
+			printLog("%02X ", temp[i+32*j]);
+		}
+		printLog("\r\n");
+	}
+}
+
+#define PRINT_TIMES
+
+void record_tof(Encounter_record_v2 *current_encounter) {
+#ifdef PRINT_TIMES
 	printLog("--------n: %d\r\n", _data_idx);
 #ifdef PRINT_T_ARRAY
 	printLog("left_t: ");
@@ -324,8 +355,12 @@ void print_times(void) {
 	}
 	printLog("\r\n");
 #endif
+#endif
 	int med, iqr;
 	iqr = IQR(left_t, _data_idx, &med);
+	current_encounter->usound.left= med;
+	current_encounter->usound.left_irq = iqr;
+#ifdef PRINT_TIMES
 	printLog("--------left: %d, %d\r\n", med, iqr);
 #ifdef PRINT_T_ARRAY
 	printLog("right_t: ");
@@ -334,8 +369,14 @@ void print_times(void) {
 	}
 	printLog("\r\n");
 #endif
+#endif
 	iqr = IQR(right_t, _data_idx, &med);
+#ifdef PRINT_TIMES
 	printLog("--------right: %d, %d\r\n", med, iqr);
+#endif
+	current_encounter->usound.n = _data_idx;
+	current_encounter->usound.right = med;
+	current_encounter->usound.right_irq = iqr;
 }
 
 void spp_client_main(void) {
@@ -447,18 +488,23 @@ void spp_client_main(void) {
 						conn_interval, 0, 200, 0, 0xFFFF);
 				_role = ROLE_SERVER_SLAVE;
 			}
-
+	        current_encounter = encounters + (c_fifo_last_idx & IDX_MASK);
+	        setup_encounter_record(evt->data.evt_le_connection_opened.address.addr);
 			break;
 
 		case gecko_evt_le_connection_closed_id:
 			printLog("DISCONNECTED!\r\n");
+            X25519_calc_shared_secret(shared_key, private_key, current_encounter->public_key);
+            memcpy(current_encounter->public_key, shared_key, 32);
 			unlinkPRS();
 			// if (_role == ROLE_SERVER_SLAVE) {
 			if (pdm_on) {
 				pdm_pause();
 				pdm_on = false;
 			}
-			print_times();
+			record_tof(current_encounter);
+			print_encounter(c_fifo_last_idx&IDX_MASK);
+			c_fifo_last_idx++;  // this actually saves the data in the fifo
 			reset_variables();
 			SLEEP_SleepBlockEnd(sleepEM2);  // Enable sleeping after disconnect
 			gecko_cmd_hardware_set_soft_timer(32768<<1, RESTART_TIMER, true);
@@ -554,15 +600,15 @@ void spp_client_main(void) {
 		case gecko_evt_gatt_characteristic_value_id:
 			if (evt->data.evt_gatt_characteristic_value.characteristic
 					== _char_handle) {
-				if (evt->data.evt_gatt_server_attribute_value.value.len > 0) {
+				if (evt->data.evt_gatt_characteristic_value.value.len > 0) {
 					uint32_t t = RTCC_CounterGet();
 					sharedCount =
-							evt->data.evt_gatt_server_attribute_value.value.data[0];
+							evt->data.evt_gatt_characteristic_value.value.data[0];
 					printLog("%lu, %lu, MC SC:%3d  len: %d\r\n", t,
 							t - prev_rtcc, sharedCount,
-							evt->data.evt_gatt_server_attribute_value.value.len);
+							evt->data.evt_gatt_characteristic_value.value.len);
 					if (sharedCount == 2) {
-						memcpy(current_encounter->public_key, evt->data.evt_gatt_server_attribute_value.value.data+1, 32);
+						memcpy(current_encounter->public_key, evt->data.evt_gatt_characteristic_value.value.data+1, 32);
 						printLog("got public key\r\n");
 					}
 					prev_rtcc = t;
@@ -638,6 +684,16 @@ void spp_client_main(void) {
 				if (sharedCount == 1) {
 					memcpy(current_encounter->public_key, evt->data.evt_gatt_server_attribute_value.value.data+1, 32);
 					printLog("got public key\r\n");
+				} else {
+					// receive time data and fill array
+					uint16_t *time_data;
+					time_data = left_t + _data_idx;
+					memcpy((uint8_t *) time_data,
+							evt->data.evt_gatt_server_attribute_value.value.data+1, 4);
+					time_data = right_t + _data_idx;
+					memcpy((uint8_t *) time_data,
+							evt->data.evt_gatt_server_attribute_value.value.data+5, 4);
+					_data_idx += 2;
 				}
 				prev_rtcc = t;
 				prev_shared_count = prev_rtcc;
@@ -651,6 +707,7 @@ void spp_client_main(void) {
 			printLog("%lu %lu %lu rssi: %d\r\n", t,
 					t - prev_rtcc, t-prev_shared_count, evt->data.evt_le_connection_rssi.rssi);
 			prev_rtcc = t;
+			current_encounter->rssi_values[(_rssi_count++)%RSSI_LIST_SIZE] = evt->data.evt_le_connection_rssi.rssi;
 			break;
 		}
 		default:

@@ -10,6 +10,9 @@
 #include "native_gecko.h"
 #include "gatt_db.h"
 #include "app.h"
+
+#include "crypto_and_time/timing.h"
+
 /****************** globals */
 extern uint8 _max_packet_size;
 extern uint8 _min_packet_size;
@@ -19,6 +22,7 @@ extern uint8_t local_mac[6];
 extern uint8 serviceUUID[16];
 
 void update_public_key(void);
+int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 
 /* end globals **************/
 
@@ -250,7 +254,24 @@ int process_scan_response(
 		// Jump to next AD record
 		i = i + ad_len + 1;
 	}
-	// return 0;
+
+	// Check if already found during this epoch_minute
+	if (ad_match_found) {
+		// check if already got data
+		uint32_t timestamp = ts_ms();
+	    if (timestamp>_time_info.next_minute) {
+	    	// Need to update key and mac address...
+	    	update_next_minute();
+	    	return 0;
+	    }
+	    uint32_t epoch_minute = ((timestamp-_time_info.offset_time) / 1000 + _time_info.epochtimesync)/60;
+
+	    int idx = in_encounters_fifo(pResp->address.addr, epoch_minute);
+	    if (idx>=0) {
+	    	printLog("Connected during this minute already\r\n");
+	    	ad_match_found = 0;
+	    }
+	}
 	printLog("ad_match_found: %d\r\n", ad_match_found);
 	return (ad_match_found);
 }
@@ -286,5 +307,48 @@ int process_scan_response_v2(
 	// return 0;
 	// printLog("ad_match_found: %d\r\n", ad_match_found);
 	return (ad_match_found);
+}
+
+#include "encounter/encounter.h"
+extern Encounter_record_v2 encounters[IDX_MASK+1];
+extern uint32_t c_fifo_last_idx;
+extern uint32_t p_fifo_last_idx;
+// extern uint32_t p_fifo_last_idx;
+
+#define SCAN_DEBUG
+void setup_encounter_record(uint8_t* mac_addr) {
+	Encounter_record_v2 *current_encounter;
+	uint32_t timestamp = ts_ms();
+
+    if (timestamp>_time_info.next_minute) update_next_minute();
+    // int sec_timestamp = (timestamp - (_time_info.next_minute - 60000)) / 1000;
+    uint32_t epoch_minute = ((timestamp-_time_info.offset_time) / 1000 + _time_info.epochtimesync)/60;
+
+#ifdef SCAN_DEBUG
+printLog("\tTry to check if in fifo, epoch_minute: %ld %lx\r\n", epoch_minute, epoch_minute);
+#endif
+    // Check if record already exists by mac
+    int idx = in_encounters_fifo(mac_addr, epoch_minute);
+#ifdef SCAN_DEBUG
+printLog("\tp_idx: %ld, c_idx: %ld\n", p_fifo_last_idx, c_fifo_last_idx);
+#endif
+    if (idx<0) {
+        // No index returned
+#ifdef SCAN_DEBUG
+printLog("\tCreate new encounter: mask_idx: %ld\n", c_fifo_last_idx & IDX_MASK);
+#endif
+        current_encounter = encounters + (c_fifo_last_idx & IDX_MASK);
+        memset((uint8_t *)current_encounter, 0, 64);  // clear all values
+        memcpy(current_encounter->mac, mac_addr, 6);
+
+        printLog("MAC address in setup: ");
+        for(int i=0; i<5; i++) {
+        	printLog("%02X:", mac_addr[i]);
+        }
+        printLog("%02X\r\n", mac_addr[5]);
+        current_encounter->minute = epoch_minute;
+        // current_encounter->version = 0xFF;
+        // c_fifo_last_idx++;
+    }
 }
 

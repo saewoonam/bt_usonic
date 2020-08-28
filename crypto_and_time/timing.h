@@ -34,5 +34,6 @@ extern struct my_time_struct _time_info;
 uint32_t ts_ms();
 void wait(int wait);
 uint32_t k_uptime_get();
+void update_next_minute(void);
 
 #endif /* CRYPTO_AND_TIME_TIMING_H_ */

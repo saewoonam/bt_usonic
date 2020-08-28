@@ -41,12 +41,12 @@
     - time: 4
     - MAC: 6
     - version: 1
-    - distance from left speaker: 1
-    - IRQ for left distance: 1
-    - distance from right speaker: 1
-    - IRQ for right distance: 1
+    - distance from left speaker: 2
+    - IRQ for left distance: 2
+    - distance from right speaker: 2
+    - IRQ for right distance: 2
     - number of good distance measures: 1
-    - RSSI values: 16
+    - RSSI values: 12
     - Encounter ID: 32
 
 

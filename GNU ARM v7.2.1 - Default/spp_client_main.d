@@ -82,7 +82,7 @@ spp_client_main.o: ../spp_client_main.c \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_rtcc.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_prs.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_gpio.h \
- ../encounter/encounter.h
+ ../encounter/encounter.h ../crypto_and_time/crypto.h
 
 /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/crypto_and_time/monocypher.h:
 
@@ -255,3 +255,5 @@ spp_client_main.o: ../spp_client_main.c \
 /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_gpio.h:
 
 ../encounter/encounter.h:
+
+../crypto_and_time/crypto.h:

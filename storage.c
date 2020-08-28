@@ -129,16 +129,17 @@ void store_event(uint8_t *event) {
 void store_time() {
     uint8_t time_evt[32];
 	memset(time_evt, 0, 32);
-	memcpy(time_evt+4, &epochtimesync, 4);
-	memcpy(time_evt+8, &offset_time, 4);
-	memcpy(time_evt+12, &offset_overflow, 4);
+	memcpy(time_evt+4, &_time_info.epochtimesync, 4);
+	memcpy(time_evt+8, &_time_info.offset_time, 4);
+	memcpy(time_evt+12, &_time_info.offset_overflow, 4);
 	memset(time_evt+16, 0xFF, 16);
+	/*
 	_time_info.gottime = true;
 	_time_info.epochtimesync = epochtimesync;
 	_time_info.next_minute = next_minute;
 	_time_info.offset_overflow = offset_overflow;
 	_time_info.offset_time = offset_time;
-
+*/
     store_event(time_evt);
 }
 
@@ -203,7 +204,7 @@ void flash_store(void) {
     Encounter_record_v2 *current_encounter;
     // uint32_t start = p_fifo_last_idx;
     uint32_t timestamp = ts_ms();
-    uint32_t epoch_minute = ((timestamp-offset_time) / 1000 + epochtimesync)/60;
+    uint32_t epoch_minute = ((timestamp-_time_info.offset_time) / 1000 + _time_info.epochtimesync)/60;
     /*
     printLog("flash_store, epoch_minute: %ld, p_idx: %ld, c_idx: %ld\n", epoch_minute,
                     p_fifo_last_idx, c_fifo_last_idx);
