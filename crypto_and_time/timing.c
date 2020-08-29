@@ -11,6 +11,8 @@
 #include "em_rtcc.h"
 #include "app.h"
 
+#include "crypto_and_time/crypto.h"
+
 extern bool write_flash;
 void flash_store(void);
 
@@ -58,6 +60,7 @@ void wait(int wait) {
 	printLog("Done wait %d\r\n", wait);
 
 }
+
 uint32_t k_uptime_get() {
 	return ts_ms();
 }
@@ -86,14 +89,18 @@ void update_next_minute(void) {
 void setup_next_minute(void) {
 	printLog("setup next_minute\r\n");
     uint32_t timestamp = ts_ms();
-    uint32_t epoch_minute_origin = (epochtimesync)/60;
-    uint32_t extra_seconds = epochtimesync - 60*epoch_minute_origin;
-    _time_info.next_minute = offset_time - extra_seconds * TICKS_PER_SECOND + 60000;
+    uint32_t epoch_minute_origin = (_time_info.epochtimesync)/60;
+    uint32_t extra_seconds =_time_info.epochtimesync - 60*epoch_minute_origin;
+    _time_info.next_minute = _time_info.offset_time - extra_seconds * TICKS_PER_SECOND + 60000;
     printLog("offset_time, timestamp, next minute: %ld, %ld, %ld\r\n",
-    		offset_time, timestamp, _time_info.next_minute);
+    		_time_info.offset_time, timestamp, _time_info.next_minute);
     /*
     while (next_minute < timestamp) {
     	next_minute += 60000;
     }
     */
+}
+
+uint32_t em(uint32_t t) {
+	return ((t-_time_info.offset_time) / 1000 + _time_info.epochtimesync)/60;
 }

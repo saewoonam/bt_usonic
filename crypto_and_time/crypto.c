@@ -10,6 +10,8 @@
 #include "native_gecko.h"
 #include "app.h"
 
+uint32_t k_uptime_get(void);
+
 uint8_t private_key[32]={0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,1};
 uint8_t public_key[32];
 uint8_t shared_key[32];

@@ -82,7 +82,12 @@ spp_client_main.o: ../spp_client_main.c \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_rtcc.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_prs.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_gpio.h \
- ../encounter/encounter.h ../crypto_and_time/crypto.h
+ ../spiflash/btl_storage.h ../spiflash/btl_interface.h \
+ ../spiflash/btl_errorcode.h ../spiflash/btl_reset_info.h \
+ /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/bootloader/api/application_properties.h \
+ ../spiflash/btl_interface_parser.h ../spiflash/btl_interface_storage.h \
+ ../spiflash/btl_storage_bootloadinfo.h ../encounter/encounter.h \
+ ../crypto_and_time/crypto.h ../crypto_and_time/timing.h ../ota.h
 
 /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/crypto_and_time/monocypher.h:
 
@@ -254,6 +259,26 @@ spp_client_main.o: ../spp_client_main.c \
 
 /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_gpio.h:
 
+../spiflash/btl_storage.h:
+
+../spiflash/btl_interface.h:
+
+../spiflash/btl_errorcode.h:
+
+../spiflash/btl_reset_info.h:
+
+/Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/bootloader/api/application_properties.h:
+
+../spiflash/btl_interface_parser.h:
+
+../spiflash/btl_interface_storage.h:
+
+../spiflash/btl_storage_bootloadinfo.h:
+
 ../encounter/encounter.h:
 
 ../crypto_and_time/crypto.h:
+
+../crypto_and_time/timing.h:
+
+../ota.h:

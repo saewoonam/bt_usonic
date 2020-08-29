@@ -9,8 +9,12 @@
 #include "native_gecko.h"
 #include "gatt_db.h"
 #include "app.h"
+#include "spiflash/btl_storage.h"
+
+#include "crypto_and_time/timing.h"
+
 /****************** globals */
-extern uint8 _max_packet_size;
+// extern uint8 _max_packet_size;
 extern uint8 _min_packet_size;
 extern uint8 _conn_handle;
 extern uint32_t encounter_count;
@@ -77,7 +81,8 @@ void send_chunk(uint32_t index) {
 		uint32_t addr = chunk_size*index;
 		do {
 			xfer_len += 4;  // Add length of packet number
-			int32_t retCode = storage_readRaw(addr, data+4, xfer_len);
+			//int32_t retCode =
+			storage_readRaw(addr, data+4, xfer_len);
 			result = gecko_cmd_gatt_server_send_characteristic_notification(_conn_handle, gattdb_gatt_spp_data, xfer_len, data)->result;
 		} while(result == bg_err_out_of_memory);
 		/*
@@ -89,7 +94,7 @@ void send_chunk(uint32_t index) {
 		*/
 	}
 }
-void send_data()
+void send_data(void)
 {
 	uint32_t len = encounter_count<<5;
 	uint8 data[256];

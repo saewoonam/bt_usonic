@@ -344,7 +344,7 @@ void shape_v2(int16_t* x, int16_t *max, int *max_idx) {
 		int pk2_idx = 0;
 
 		find_max(x, *max_idx-100, &max2, &idx2);
-		int w = width(x, idx2, 0.5, &pk2_idx);
+		int w = width(x, idx2, 0.5, &pk2_idx); // do we need this?
 		int thresh = *max * 0.2;
 		// printLog("thresh: %d\r\n", thresh);
 		if (thresh < 30) thresh = 30;

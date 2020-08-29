@@ -13,12 +13,13 @@
 
 
 #define TICKS_PER_SECOND 32768
+/*
 extern uint32_t time_overflow;   // current time overflow
 extern uint32_t offset_time;
 extern uint32_t offset_overflow;  // set of offset has overflowed
 extern uint32_t next_minute;
 extern uint32_t epochtimesync;
-
+*/
 struct my_time_struct
 {
 	uint32_t time_overflow;
@@ -35,5 +36,7 @@ uint32_t ts_ms();
 void wait(int wait);
 uint32_t k_uptime_get();
 void update_next_minute(void);
+void setup_next_minute(void);
+uint32_t em(uint32_t t);
 
 #endif /* CRYPTO_AND_TIME_TIMING_H_ */

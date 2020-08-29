@@ -137,7 +137,7 @@ static VoltageCapacityPair battCR2032Model[] =
 { { 3.0, 100 }, { 2.9, 80 }, { 2.8, 60 }, { 2.7, 40 }, { 2.6, 30 },
   { 2.5, 20 }, { 2.4, 10 }, { 2.0, 0 } };
 
-static uint8_t battBatteryLevel; /* Battery Level */
+extern uint8_t battBatteryLevel; /* Battery Level */
 
 /***************************************************************************************************
  * Static Function Declarations

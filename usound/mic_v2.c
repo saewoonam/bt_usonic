@@ -238,7 +238,7 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 //				printf("%ld, %ld, %ld, **** shape_v2\r\n",
 //						curr, curr-prev_rtcc, curr-t0);
 //				prev_rtcc = curr;
-				int p2_l, p2_r;
+//				int p2_l, p2_r;
 				// int left_w = width(corr, l_t, 0.5, &p2_l);
 				if (out == 2)
 					dump_array((uint8_t *) corr, BUFFER_SIZE << 1);

@@ -143,6 +143,8 @@ static void initTimers() {
 	initTIMER1();
 }
 
+
+
 /* Main application */
 void appMain(gecko_configuration_t *pconfig) {
 #if DISABLE_SLEEP > 0
@@ -163,3 +165,17 @@ void appMain(gecko_configuration_t *pconfig) {
 	/*  jump to SPP program main loop */
 	spp_main();
 }
+
+//void extra() {
+//	  adcInit();
+//	  readBatteryLevel();
+//	  printLog("BatteryLevel %d\r\n", battBatteryLevel);
+//	  /* Initialize stack */
+//	  // gecko_init(pconfig);
+//	  int32_t flash_ret = storage_init();
+//	  uint32_t flash_size = storage_size();
+//	  printLog("storage_init: %ld %ld\r\n", flash_ret, flash_size);
+//	  determine_counts(flash_size);
+//	  test_encrypt_compare();
+//	  read_name_ps();
+//}

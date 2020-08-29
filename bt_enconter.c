@@ -12,19 +12,29 @@
 #include "app.h"
 
 #include "crypto_and_time/timing.h"
-
+#include "ota.h"
 /****************** globals */
-extern uint8 _max_packet_size;
-extern uint8 _min_packet_size;
+//extern uint8 _max_packet_size;
+//extern uint8 _min_packet_size;
 extern uint8 _conn_handle;
-extern uint32_t encounter_count;
+//extern uint32_t encounter_count;
 extern uint8_t local_mac[6];
 extern uint8 serviceUUID[16];
 
-void update_public_key(void);
+//void update_public_key(void);
 int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
+// extern int32_t k_goertzel;
+extern int32_t k_speaker;
 
 /* end globals **************/
+
+#define K_OFFSET	276
+/* Definitions of external signals */
+#define BUTTON_PRESSED (1 << 0)
+#define BUTTON_RELEASED (1 << 1)
+#define LOG_MARK (1<<2)
+#define LOG_UNMARK (1<<3)
+#define LOG_RESET (1<<4)
 
 struct
 {
@@ -72,6 +82,11 @@ void get_local_mac(void) {
 	memcpy(local_mac, local_addr.addr,  6);
 }
 
+int32_t calc_k_from_mac(uint8_t *mac) {
+	int index = (mac[1] & 0xF) << 3;
+	return K_OFFSET + index;
+}
+
 void set_new_mac_address(void) {
 	bd_addr rnd_addr;
 	struct gecko_msg_le_gap_set_advertise_random_address_rsp_t *response;
@@ -90,8 +105,10 @@ void set_new_mac_address(void) {
 				0x02, rnd_addr);
 	} while (response->result > 0);
 	memcpy(local_mac, rnd_addr.addr, 6);
-
-//  gecko_cmd_le_gap_start_advertising(HANDLE_ADV, le_gap_user_data, le_gap_non_connectable);
+#ifdef K_FROM_MAC
+	k_speaker = calc_k_from_mac(local_mac);
+#endif
+	//  gecko_cmd_le_gap_start_advertising(HANDLE_ADV, le_gap_user_data, le_gap_non_connectable);
 }
 
 void setup_adv(void) {
@@ -352,3 +369,109 @@ printLog("\tCreate new encounter: mask_idx: %ld\n", c_fifo_last_idx & IDX_MASK);
     }
 }
 
+#include "encounter/encounter.h"
+
+void fake_encounter(uint8_t num) {
+    Encounter_record_v2 *current_encounter;
+	uint32_t timestamp = ts_ms();
+    if (timestamp>_time_info.next_minute) update_next_minute();
+//    int sec_timestamp = (timestamp - (_time_info.next_minute - 60000)) / 1000;
+    uint32_t epoch_minute = ((timestamp-_time_info.offset_time) / 1000 + _time_info.epochtimesync)/60;
+
+    uint8_t mac_addr[6] = {0, 0, 0, 0, 0, 0};
+    memset(mac_addr, num-1, 6);
+    current_encounter = encounters + (c_fifo_last_idx & IDX_MASK);
+    memset((uint8_t *)current_encounter, 0, 64);  // clear all values
+    memcpy(current_encounter->mac, mac_addr, 6);
+    current_encounter->minute = epoch_minute;
+    memset(current_encounter->public_key, num, 32);
+    c_fifo_last_idx++;
+}
+
+
+void process_ext_signals(uint32_t signals) {
+	if (signals & LOG_MARK) {
+		printLog("MARK\r\n");
+		fake_encounter(1);
+	}
+	if (signals & LOG_UNMARK) {
+		printLog("UNMARK\r\n");
+		fake_encounter(2);
+	}
+
+	if (signals & LOG_RESET) {
+		printLog("RESET MARK\r\n");
+		fake_encounter(3);
+
+	}
+
+
+    if (signals & BUTTON_PRESSED) {
+    	printLog("Button Pressed\r\n");
+    }
+
+    if (signals & BUTTON_RELEASED) {
+    	printLog("Button released (reset)\r\n");
+    }
+
+}
+
+void process_server_spp_from_computer(struct gecko_cmd_packet* evt, bool sending_ota, bool sending_turbo) {
+	if (evt->data.evt_gatt_server_attribute_value.attribute
+			== gattdb_gatt_spp_data) {
+		if (sending_ota) {
+			uint32_t *index;
+			int len = evt->data.evt_gatt_server_attribute_value.value.len;
+			if (len == 4) {
+				index =
+						(uint32_t *) evt->data.evt_gatt_server_attribute_value.value.data;
+				// printLog("Got request for data, len %d, idx: %ld\r\n", evt->data.evt_gatt_server_attribute_value.value.len, *index);
+				send_chunk(*index);
+			} else {
+				printLog("Recevied the wrong number of bytes: %d/4\r\n", len);
+			}
+		} else if (sending_turbo) {
+			uint32_t *params;
+			int len = evt->data.evt_gatt_server_attribute_value.value.len;
+			if (len == 8) {
+				params =
+						(uint32_t *) evt->data.evt_gatt_server_attribute_value.value.data;
+				printLog(
+						"Got request for turbo data, len %d, idx: %lu len: %lu\r\n",
+						evt->data.evt_gatt_server_attribute_value.value.len,
+						params[0], params[1]);
+				send_data_turbo(params[0], params[1]);
+			} else {
+				printLog("Recevied the wrong number of bytes: %d/8\r\n", len);
+			}
+		} else {
+			char *msg;
+			msg = (char *) evt->data.evt_gatt_server_attribute_value.value.data;
+			printLog("new message: %s\r\n", msg);
+		}
+	} else if (evt->data.evt_gatt_server_attribute_value.attribute
+			== gattdb_data_in) {
+
+		if (sending_ota) {
+			uint32_t *index;
+			int len = evt->data.evt_gatt_server_attribute_value.value.len;
+			if (len == 4) {
+				index =
+						(uint32_t *) evt->data.evt_gatt_server_attribute_value.value.data;
+				// printLog("Got request for packet, len %d, idx: %ld\r\n", evt->data.evt_gatt_server_attribute_value.value.len, *index);
+				send_chunk(*index);
+			} else {
+				printLog("Recevied the wrong number of bytes: %d/4\r\n", len);
+			}
+		} else {
+			char *msg;
+			msg = (char *) evt->data.evt_gatt_server_attribute_value.value.data;
+			printLog("gatt_data_in new message: %s\r\n", msg);
+		}
+
+		printLog("gatt data_in\r\n");
+	}
+// printLog("Done attribute_value_id\r\n");
+// parse_command(c);
+
+}
