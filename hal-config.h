@@ -22,6 +22,24 @@
 #include "hal-config-board.h"
 #include "hal-config-app-common.h"
 
+// $[EXTFLASH]
+#define BSP_EXTFLASH_CS_PIN                (3U)
+#define BSP_EXTFLASH_CS_PORT               (gpioPortC)
+
+#define BSP_EXTFLASH_INTERNAL              (0)
+#define BSP_EXTFLASH_USART                 (HAL_SPI_PORT_USART0)
+#define BSP_EXTFLASH_MOSI_PIN              (0U)
+#define BSP_EXTFLASH_MOSI_PORT             (gpioPortC)
+
+#define BSP_EXTFLASH_MISO_PIN              (1U)
+#define BSP_EXTFLASH_MISO_PORT             (gpioPortC)
+
+#define BSP_EXTFLASH_CLK_PIN               (2U)
+#define BSP_EXTFLASH_CLK_PORT              (gpioPortC)
+
+// #define HAL_EXTFLASH_FREQUENCY             (6400000UL)
+// [EXTFLASH]$
+
 #ifndef HAL_VCOM_ENABLE
 #define HAL_VCOM_ENABLE                   (1)
 #endif

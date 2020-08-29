@@ -24,7 +24,7 @@ extern uint8 serviceUUID[16];
 //void update_public_key(void);
 int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 // extern int32_t k_goertzel;
-extern int32_t k_speaker;
+// extern int32_t k_speaker;
 
 /* end globals **************/
 
@@ -239,12 +239,12 @@ int process_scan_response(
 	char name[32];
 
     char dev_name[]="Empty Ex";
-    printLog("Process scan\r\n");
+    // printLog("Process scan\r\n");
 	while (i < (pResp->data.len - 1)) {
 
 		ad_len = pResp->data.data[i];
 		ad_type = pResp->data.data[i + 1];
-
+#ifdef NAME_MATCH
 		if (ad_type == 0x08 || ad_type == 0x09) {
 			// Type 0x08 = Shortened Local Name
 			// Type 0x09 = Complete Local Name
@@ -256,13 +256,13 @@ int process_scan_response(
 				flushLog();
 			}
 		}
-
+#endif
 		// 4880c12c-fdcb-4077-8920-a450d7f9b907
 		if (ad_type == 0x06 || ad_type == 0x07) {
 			// Type 0x06 = Incomplete List of 128-bit Service Class UUIDs
 			// Type 0x07 = Complete List of 128-bit Service Class UUIDs
 			if (memcmp(serviceUUID, &(pResp->data.data[i + 2]), 16) == 0) {
-				printLog("Found SPP device\r\n");
+				// printLog("Found SPP device\r\n");
 				// ad_match_found = 1;
 				ad_match_found = compare_mac(pResp->address.addr);
 			}
@@ -285,11 +285,11 @@ int process_scan_response(
 
 	    int idx = in_encounters_fifo(pResp->address.addr, epoch_minute);
 	    if (idx>=0) {
-	    	printLog("Connected during this minute already\r\n");
+	    	// printLog("Connected during this minute already\r\n");
 	    	ad_match_found = 0;
 	    }
 	}
-	printLog("ad_match_found: %d\r\n", ad_match_found);
+	// printLog("ad_match_found: %d\r\n", ad_match_found);
 	return (ad_match_found);
 }
 
@@ -358,7 +358,7 @@ printLog("\tCreate new encounter: mask_idx: %ld\n", c_fifo_last_idx & IDX_MASK);
         memset((uint8_t *)current_encounter, 0, 64);  // clear all values
         memcpy(current_encounter->mac, mac_addr, 6);
 
-        printLog("MAC address in setup: ");
+        printLog("remote MAC address in setup: ");
         for(int i=0; i<5; i++) {
         	printLog("%02X:", mac_addr[i]);
         }
@@ -415,7 +415,45 @@ void process_ext_signals(uint32_t signals) {
     }
 
 }
+/*
+void process_server_spp_from_btdev(struct gecko_cmd_packet* evt) {
+	static uint32_t prev_shared_count = 0; // temp copy this variable
 
+	if (evt->data.evt_gatt_server_attribute_value.value.len
+			> 0) {
+		uint32_t t = RTCC_CounterGet();
+		sharedCount =
+				evt->data.evt_gatt_server_attribute_value.value.data[0];
+		printLog("%lu %lu %lu slave server SC: %d len: %d\r\n",
+				t, t - prev_rtcc, t - prev_shared_count,
+				sharedCount,
+				evt->data.evt_gatt_server_attribute_value.value.len
+				);
+		if (sharedCount == 1) {
+			memcpy(current_encounter->public_key,
+					evt->data.evt_gatt_server_attribute_value.value.data
+							+ 1, 32);
+			printLog("got public key\r\n");
+		} else {
+			// receive time data and fill array
+			int16_t *time_data;
+			time_data = left_t + _data_idx;
+			memcpy((uint8_t *) time_data,
+					evt->data.evt_gatt_server_attribute_value.value.data
+							+ 1, 4);
+			time_data = right_t + _data_idx;
+			memcpy((uint8_t *) time_data,
+					evt->data.evt_gatt_server_attribute_value.value.data
+							+ 5, 4);
+			_data_idx += 2;
+		}
+		prev_rtcc = t;
+		prev_shared_count = prev_rtcc;
+		send_spp_data();
+		gecko_cmd_le_connection_get_rssi(_conn_handle);
+	}
+}
+*/
 void process_server_spp_from_computer(struct gecko_cmd_packet* evt, bool sending_ota, bool sending_turbo) {
 	if (evt->data.evt_gatt_server_attribute_value.attribute
 			== gattdb_gatt_spp_data) {

@@ -90,6 +90,7 @@ static StorageSpiflashDevice_t getDeviceType(void)
         default:
           return UNKNOWN_DEVICE;
       }
+      break;
     case MFG_ID_WINBOND:
       switch (deviceId) {
 #if defined(BTL_STORAGE_SPIFLASH_WINBOND_W25X20BV)
@@ -103,6 +104,7 @@ static StorageSpiflashDevice_t getDeviceType(void)
         default:
           return UNKNOWN_DEVICE;
       }
+      break;
     case MFG_ID_MACRONIX:
       switch (deviceId) {
 #if defined(BTL_STORAGE_SPIFLASH_MACRONIX_MX25L2006E)
@@ -136,6 +138,7 @@ static StorageSpiflashDevice_t getDeviceType(void)
         default:
           return UNKNOWN_DEVICE;
       }
+      break;
     case MFG_ID_ATMEL:
       // also MFG_ID_ADESTO
       switch (deviceId) {
@@ -154,6 +157,7 @@ static StorageSpiflashDevice_t getDeviceType(void)
         default:
           return UNKNOWN_DEVICE;
       }
+      break;
     case MFG_ID_NUMONYX:
       switch (deviceId) {
 #if defined(BTL_STORAGE_SPIFLASH_NUMONYX_M25P20)
@@ -175,6 +179,7 @@ static StorageSpiflashDevice_t getDeviceType(void)
         default:
           return UNKNOWN_DEVICE;
       }
+      break;
     case MFG_ID_ISSI:
       switch (deviceId) {
 #if defined(BTL_STORAGE_SPIFLASH_ISSI_IS25LQ025B)
@@ -200,6 +205,7 @@ static StorageSpiflashDevice_t getDeviceType(void)
         default:
           return UNKNOWN_DEVICE;
       }
+      break;
     default:
       return UNKNOWN_DEVICE;
   }

@@ -148,12 +148,17 @@ void read_name_ps(void) {
 	uint8_t *name;
 	struct gecko_msg_flash_ps_load_rsp_t *result;
     result = gecko_cmd_flash_ps_load(k);
-    printLog("read_name_ps 0x%04X\r\n", result->result);
+    // printLog("read_name_ps 0x%04X\r\n", result->result);
     if (result->result==0) {
     	if (result->value.len==8) {
     		name = result->value.data;
     		gecko_cmd_gatt_server_write_attribute_value(gattdb_device_name, 0, 8, name);
-    	} else { printLog("Problem readinig BT name\r\n"); }
+    		printLog("retrieved name: ");
+    		for(int i=0; i<8; i++) {
+    			printLog("%c", name[i]);
+    		}
+    		printLog("\r\n");
+    	} else { printLog("Problem reading BT name\r\n"); }
     }
 }
 

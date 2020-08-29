@@ -46,10 +46,11 @@
 #define FIND_SERVICE	2
 #define FIND_CHAR		  3
 #define ENABLE_NOTIF 	4
-#define DATA_MODE		  5
-#define DISCONNECTING 6
-#define STATE_CONNECTED   7
-#define STATE_SPP_MODE 8
+#define SEND_0			5
+#define DATA_MODE		  6
+#define DISCONNECTING 7
+#define STATE_CONNECTED   8
+#define STATE_SPP_MODE 9
 #define ROLE_UNKNOWN -1
 #define ROLE_CLIENT_MASTER 0
 #define ROLE_SERVER_SLAVE 1
@@ -126,7 +127,7 @@ void set_name(uint8_t *name);
 
 void readBatteryLevel(void);
 
-int32_t calc_k_from_mac(uint8_t *mac);
+// int32_t calc_k_from_mac(uint8_t *mac);
 
 bool pdm_on = false;
 
@@ -187,7 +188,7 @@ uint8_t local_mac[6];
 /* Default maximum packet size is 20 bytes. This is adjusted after connection is opened based
  * on the connection parameters */
 
-volatile int conn_interval = 400;
+volatile int conn_interval = 64;
 Encounter_record_v2 *current_encounter = encounters;
 static int8  _rssi_count = 0;
 
@@ -225,13 +226,15 @@ static void send_rw_client(char cmd) {
 
 	// Stack may return "out-of-memory" error if the local buffer is full -> in that case, just keep trying until the command succeeds
 	do {
-		result = gecko_cmd_gatt_write_characteristic_value_without_response(
+		//result = gecko_cmd_gatt_write_characteristic_value_without_response(
+		result = gecko_cmd_gatt_write_characteristic_value(
 				_conn_handle, _char_rw_handle, len, (uint8_t *) &cmd)->result;
 	} while (result == bg_err_out_of_memory);
 
 	if (result != 0) {
-		printLog("Unexpected error: %x\r\n", result);
+		printLog("Unexpected error try to send char_rw:%c 0x%x\r\n", cmd, result);
 	}
+	printLog("Sent rw command: %c\r\n", cmd);
 }
 
 static void send_spp_data_client() {
@@ -239,13 +242,13 @@ static void send_spp_data_client() {
 	uint16 result;
 	uint8_t temp[33];
 
-	printLog("send spp data client, got %d\r\n", sharedCount);
 	if (sharedCount==0) {
 		printLog("********send PUBLIC KEY from client\r\n");
 		memcpy(temp+1, public_key, 32);
 		len = 33;
 	} else {
-		printLog("*******send usound %d\r\n", _data_idx);
+		printLog("send spp data client, got %d\r\n", sharedCount);
+		printLog("*******send usound _data_idx %d\r\n", _data_idx);
 		if (_data_idx > 1) {
 			int16_t *time_data;
 			time_data = left_t + (_data_idx-2);
@@ -266,7 +269,7 @@ static void send_spp_data_client() {
 	} while (result == bg_err_out_of_memory);
 
 	if (result != 0) {
-		printLog("Unexpected error: %x\r\n", result);
+		printLog("Unexpected error sending shared count: %x\r\n", result);
 	}
 
 }
@@ -291,13 +294,13 @@ static void send_spp_data() {
 		} while (result == bg_err_out_of_memory);
 
 		if (result != 0) {
-			printLog("Unexpected error: %x\r\n", result);
+			printLog("Unexpected error trying to send shared count: %x\r\n", result);
 		}
 }
 
-
+#define LINKPRS
 void linkPRS() {
-	//if (_role == ROLE_CLIENT_MASTER) {
+#ifdef LINKPRS
 	if (_role == ROLE_SERVER_SLAVE) {
 		// setup speaker
 		PRS_SourceAsyncSignalSet(TX_OBS_PRS_CHANNEL,
@@ -311,6 +314,7 @@ void linkPRS() {
 		pdm_start();
 		pdm_on = true;
 	}
+#endif
 }
 
 void unlinkPRS() {
@@ -504,10 +508,12 @@ void parse_bt_command(uint8_t c) {
     }
 	case '0':
 		_client_type = CLIENT_IS_BTDEV;
+		printLog("set client type %d\r\n", _client_type);
 		break;
 
 	case '1':
 		_client_type = CLIENT_IS_COMPUTER;
+		printLog("set client type %d\r\n", _client_type);
 		break;
 
 	default:
@@ -588,7 +594,7 @@ void print_encounter(int index) {
 }
 
 #define PRINT_TIMES
-
+#define PRINT_T_ARRAY
 void record_tof(Encounter_record_v2 *current_encounter) {
 #ifdef PRINT_TIMES
 	printLog("--------n: %d\r\n", _data_idx);
@@ -815,24 +821,28 @@ void spp_client_main(void) {
 					// Char found, turn on indications
 					gecko_cmd_gatt_set_characteristic_notification(_conn_handle,
 							_char_handle, gatt_notification);
-					_main_state = ENABLE_NOTIF;
-					// Send rw command that a bt dev is trying to connect
-					send_rw_client('0');
+					_main_state = SEND_0;
 				} else {
 					// No characteristic found? -> disconnect
 					printLog("SPP char not found?\r\n");
 					gecko_cmd_le_connection_close(_conn_handle);
 				}
 				break;
+			case SEND_0:
+				_main_state = ENABLE_NOTIF;
+				send_rw_client('0');
+				break;
 			case ENABLE_NOTIF:
 				_main_state = DATA_MODE;
 				printLog("SPP Mode ON\r\n");
 				SLEEP_SleepBlockBegin(sleepEM2); // Disable sleeping when SPP mode active
 		        linkPRS();
+				// Send rw command that a bt dev is trying to connect
 				sharedCount = 0;
 				send_spp_data_client();
 				break;
 			default:
+				printLog("Unhandled gatt completed event\r\n");
 				break;
 			}
 			break;
@@ -937,42 +947,32 @@ void spp_client_main(void) {
 		case gecko_evt_gatt_server_attribute_value_id: {
 			struct gecko_msg_gatt_server_attribute_value_evt_t *v;
 			v = &(evt->data.evt_gatt_server_attribute_value);
-			if (evt->data.evt_gatt_server_attribute_value.attribute
-					== gattdb_Read_Write) {
+			if (v->attribute == gattdb_Read_Write) {
 				int c = evt->data.evt_gatt_server_attribute_value.value.data[0];
 				printLog("new rw value %c, v %c\r\n", c, v->value.data[0]);
 				parse_bt_command(c);
-			} else if (evt->data.evt_gatt_server_attribute_value.attribute
-					== gattdb_gatt_spp_data) {
-				//if (_client_type == _client_type) {
+			} else if (v->attribute == gattdb_gatt_spp_data) {
 				if (_client_type == CLIENT_IS_BTDEV) {
-					if (evt->data.evt_gatt_server_attribute_value.value.len
-							> 0) {
+					if (v->value.len > 0) {
 						uint32_t t = RTCC_CounterGet();
-						sharedCount =
-								evt->data.evt_gatt_server_attribute_value.value.data[0];
-						printLog("%lu %lu %lu slave server SC: %d len: %d, %d, %d\r\n",
+						sharedCount = v->value.data[0];
+						printLog("%lu %lu %lu slave server SC: %d len: %d\r\n",
 								t, t - prev_rtcc, t - prev_shared_count,
-								sharedCount,
-								evt->data.evt_gatt_server_attribute_value.value.len,
 								v->value.data[0],
 								v->value.len);
 						if (sharedCount == 1) {
 							memcpy(current_encounter->public_key,
-									evt->data.evt_gatt_server_attribute_value.value.data
-											+ 1, 32);
+									v->value.data + 1, 32);
 							printLog("got public key\r\n");
 						} else {
 							// receive time data and fill array
 							int16_t *time_data;
 							time_data = left_t + _data_idx;
 							memcpy((uint8_t *) time_data,
-									evt->data.evt_gatt_server_attribute_value.value.data
-											+ 1, 4);
+									v->value.data + 1, 4);
 							time_data = right_t + _data_idx;
 							memcpy((uint8_t *) time_data,
-									evt->data.evt_gatt_server_attribute_value.value.data
-											+ 5, 4);
+									v->value.data + 5, 4);
 							_data_idx += 2;
 						}
 						prev_rtcc = t;

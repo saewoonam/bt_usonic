@@ -3,7 +3,7 @@ init_app.o: ../init_app.c \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hal-config.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/board_features.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/ble-configuration.h \
- /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hardware/kit/EFR32MG22_BRD4182A/config/hal-config-board.h \
+ /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hardware/kit/EFR32BG22_BRD4184A/config/hal-config-board.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/Device/SiliconLabs/EFR32MG22/Include/em_device.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/Device/SiliconLabs/EFR32MG22/Include/efr32mg22c224f512im40.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/CMSIS/Include/core_cm33.h \
@@ -82,7 +82,7 @@ init_app.o: ../init_app.c \
 
 /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/ble-configuration.h:
 
-/Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hardware/kit/EFR32MG22_BRD4182A/config/hal-config-board.h:
+/Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hardware/kit/EFR32BG22_BRD4184A/config/hal-config-board.h:
 
 /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/Device/SiliconLabs/EFR32MG22/Include/em_device.h:
 

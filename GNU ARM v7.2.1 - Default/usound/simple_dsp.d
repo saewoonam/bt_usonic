@@ -70,7 +70,7 @@ usound/simple_dsp.o: ../usound/simple_dsp.c ../usound/simple_dsp.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hal-config.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/board_features.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/ble-configuration.h \
- /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hardware/kit/EFR32MG22_BRD4182A/config/hal-config-board.h \
+ /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hardware/kit/EFR32BG22_BRD4184A/config/hal-config-board.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/halconfig/inc/hal-config/hal-config-types.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/emlib/inc/em_gpio.h \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hal-config-app-common.h
@@ -219,7 +219,7 @@ usound/simple_dsp.o: ../usound/simple_dsp.c ../usound/simple_dsp.h \
 
 /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/ble-configuration.h:
 
-/Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hardware/kit/EFR32MG22_BRD4182A/config/hal-config-board.h:
+/Users/nams/SimplicityStudio/v4_workspace/bt-usonic/hardware/kit/EFR32BG22_BRD4184A/config/hal-config-board.h:
 
 /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/halconfig/inc/hal-config/hal-config-types.h:
 
