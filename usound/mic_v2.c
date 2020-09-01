@@ -275,7 +275,11 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 			} else {
 				if (out > 0) printLog("DATA 0\r\n");
 				if (out > 0) printLog("DATA 0\r\n");
-
+//				int l_t = 0;
+//				int r_t = 0;
+//				insert(l_t, left_t);
+//				insert(r_t, right_t);
+//				_data_idx++;
 				curr = RTCC_CounterGet();
 				printLog("%ld, %ld ----pk: %d, %d\r\n", curr, curr - prev_rtcc,
 						0, 0);

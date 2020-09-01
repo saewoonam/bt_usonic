@@ -29,6 +29,7 @@ int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 /* end globals **************/
 
 #define K_OFFSET	276
+#define K_OFFSET2	428
 /* Definitions of external signals */
 #define BUTTON_PRESSED (1 << 0)
 #define BUTTON_RELEASED (1 << 1)
@@ -83,8 +84,13 @@ void get_local_mac(void) {
 }
 
 int32_t calc_k_from_mac(uint8_t *mac) {
-	int index = (mac[1] & 0xF) << 3;
-	return K_OFFSET + index;
+	// int index = (mac[1] & 0xF) << 3;
+	int index = mac[1] % 24;
+	if (index<18) {
+		return K_OFFSET + (index<<3);
+	} else {
+		return K_OFFSET2 + ((index-18)<<3);
+	}
 }
 
 void set_new_mac_address(void) {
@@ -370,6 +376,7 @@ printLog("\tCreate new encounter: mask_idx: %ld\n", c_fifo_last_idx & IDX_MASK);
 }
 
 #include "encounter/encounter.h"
+void print_encounter(int index);
 
 void fake_encounter(uint8_t num) {
     Encounter_record_v2 *current_encounter;
@@ -381,10 +388,10 @@ void fake_encounter(uint8_t num) {
     uint8_t mac_addr[6] = {0, 0, 0, 0, 0, 0};
     memset(mac_addr, num-1, 6);
     current_encounter = encounters + (c_fifo_last_idx & IDX_MASK);
-    memset((uint8_t *)current_encounter, 0, 64);  // clear all values
+    memset((uint8_t *)current_encounter, num, 64);  // clear all values
     memcpy(current_encounter->mac, mac_addr, 6);
     current_encounter->minute = epoch_minute;
-    memset(current_encounter->public_key, num, 32);
+	// print_encounter(c_fifo_last_idx & IDX_MASK);
     c_fifo_last_idx++;
 }
 

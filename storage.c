@@ -36,6 +36,11 @@ extern uint32_t encounter_count;
 extern bool write_flash;
 
 /***************************************************************************************************
+external functions
+ **************************************************************************************************/
+void update_counts_status(void);
+
+/***************************************************************************************************
  functions
  **************************************************************************************************/
 
@@ -70,7 +75,8 @@ void determine_counts(uint32_t flash_size) {
 
 	encounter_count = count;
 	printLog("number of records: %ld\r\n", count);
-	gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4, (const uint8*) &count);
+	update_counts_status();
+	//gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4, (const uint8*) &count);
 }
 
 //void test_write_flash() {
@@ -96,7 +102,8 @@ void flash_erase() {
 		printLog("Problem with erasing flash. %ld\r\n", retCode);
 	} else {
 		encounter_count = 0;
-		gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4, (const uint8*) &encounter_count);
+		update_counts_status();
+		// gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4, (const uint8*) &encounter_count);
 		// untransferred_start = 0;
 	}
 	// bool empty = verifyErased(0, 1<<20);
@@ -118,7 +125,8 @@ void store_event(uint8_t *event) {
 		}
 		encounter_count++;
 		printLog("Encounter_count: %ld\r\n", encounter_count);
-		gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4, (const uint8*) &encounter_count);
+		update_counts_status();
+		// gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4, (const uint8*) &encounter_count);
 	} else {
 		/* Need to indicate that memory is full */
 		;
@@ -227,6 +235,7 @@ void flash_store(void) {
         	*/
         	store_event(ptr);
         	store_event(ptr+32);
+        	// print_encounter(p_fifo_last_idx & IDX_MASK);
 
         	p_fifo_last_idx++;
         } else {

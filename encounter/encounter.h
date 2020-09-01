@@ -46,5 +46,6 @@ typedef struct Encounter_records_v2 {
 	uint8_t public_key[32];
 } Encounter_record_v2;
 
+void print_encounter(int index);
 
 #endif // ENCOUNTER_H

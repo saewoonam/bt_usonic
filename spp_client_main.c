@@ -44,9 +44,9 @@
 #define DISCONNECTED	0
 #define SCAN_ADV		  1
 #define FIND_SERVICE	2
-#define FIND_CHAR		  3
-#define ENABLE_NOTIF 	4
-#define SEND_0			5
+#define SEND_0			3
+#define FIND_SPP		  4
+#define ENABLE_NOTIF 	5
 #define DATA_MODE		  6
 #define DISCONNECTING 7
 #define STATE_CONNECTED   8
@@ -194,7 +194,7 @@ static int8  _rssi_count = 0;
 
 static int8 _client_type = -1;
 static bool sending_ota = false;
-
+static uint8 _status = 1<<2;  // start with clock not set bit
 
 static void reset_variables() {
 	_conn_handle = 0xFF;
@@ -220,6 +220,17 @@ int process_scan_response(
 void start_adv(void);
 void setup_adv(void);
 
+void record_tof(Encounter_record_v2 *current_encounter);
+
+
+void update_counts_status(void) {
+	uint8_t temp[4];
+	memcpy(temp, (uint8_t *) &encounter_count, 4);
+	temp[3] = _status;
+	gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4,
+			temp);
+}
+
 static void send_rw_client(char cmd) {
 	uint8 len = 1;
 	uint16 result;
@@ -240,23 +251,23 @@ static void send_rw_client(char cmd) {
 static void send_spp_data_client() {
 	uint8 len = 1;
 	uint16 result;
-	uint8_t temp[33];
+	uint8_t temp[81];
 
 	if (sharedCount==0) {
 		printLog("********send PUBLIC KEY from client\r\n");
 		memcpy(temp+1, public_key, 32);
 		len = 33;
-	} else {
+	} else if (sharedCount==20) {
 		printLog("send spp data client, got %d\r\n", sharedCount);
 		printLog("*******send usound _data_idx %d\r\n", _data_idx);
-		if (_data_idx > 1) {
-			int16_t *time_data;
-			time_data = left_t + (_data_idx-2);
-			memcpy(temp+1, (uint8_t *) time_data, 4);
-			time_data = right_t + (_data_idx-2);
-			memcpy(temp+5, (uint8_t *) time_data, 4);
-			len = 9;
-		}
+		record_tof(current_encounter);
+		temp[1] = current_encounter->usound.n;
+		uint16_t *usound_data = (uint16_t *) (temp+2);
+		usound_data[0] = current_encounter->usound.left;
+		usound_data[1] = current_encounter->usound.left_irq;
+		usound_data[2] = current_encounter->usound.right;
+		usound_data[3] = current_encounter->usound.right_irq;
+		len = 10;
 	}
 
 	sharedCount++;
@@ -402,6 +413,7 @@ void parse_bt_command(uint8_t c) {
 	}
 	case 'w':{
 		if (!write_flash) {
+			_status |= 0x01;
 			start_writing_flash();
 		}
         break;
@@ -409,6 +421,8 @@ void parse_bt_command(uint8_t c) {
 	case 's':{
 		write_flash = false;
 		mark_set = false;
+		_status = 0;
+		update_counts_status();
 		printLog("Stop writing to flash\r\n");
         break;
 	}
@@ -478,7 +492,8 @@ void parse_bt_command(uint8_t c) {
 
 		printLog("epochtimes, e_min, e_min_origin: %ld %ld %ld\r\n",
 				_time_info.epochtimesync, epoch_minute, epoch_minute_origin);
-        // store_time();
+		_status &= ~(1<<2); // clear clock not set bit
+		update_counts_status();
 		break;
 	}
 
@@ -492,11 +507,15 @@ void parse_bt_command(uint8_t c) {
 	case 'M': {
         gecko_external_signal(LOG_MARK);
         mark_set = true;
+        _status |= 0x2;
+        update_counts_status();
         break;
 	}
 	case 'U': {
         gecko_external_signal(LOG_UNMARK);
         mark_set = false;
+        _status &= 0xFD;
+        update_counts_status();
         break;
 	}
     case 'h':
@@ -591,10 +610,11 @@ void print_encounter(int index) {
 		}
 		printLog("\r\n");
 	}
+	flushLog();
 }
 
 #define PRINT_TIMES
-#define PRINT_T_ARRAY
+// #define PRINT_T_ARRAY
 void record_tof(Encounter_record_v2 *current_encounter) {
 #ifdef PRINT_TIMES
 	printLog("--------n: %d\r\n", _data_idx);
@@ -636,7 +656,7 @@ void spp_client_main(void) {
 		struct gecko_cmd_packet* evt;
 
 		// evt = gecko_wait_event();
-	    if (true) {
+	    if (false) {
 	      /* If SPP data mode is active, use non-blocking gecko_peek_event() */
 	      evt = gecko_peek_event();
 	      int c = RETARGET_ReadChar();
@@ -735,6 +755,9 @@ void spp_client_main(void) {
 					evt->data.evt_le_connection_opened.connection);
 			if (evt->data.evt_le_connection_opened.master == 1) {
 				// Start service discovery (we are only interested in one UUID)
+				gecko_cmd_le_connection_set_timing_parameters(_conn_handle, conn_interval,
+						conn_interval, 0, 200, 0, 0xFFFF);
+
 				gecko_cmd_gatt_discover_primary_services_by_uuid(_conn_handle,
 						16, serviceUUID);
 				_main_state = FIND_SERVICE;
@@ -748,8 +771,8 @@ void spp_client_main(void) {
 			} else {
 				_conn_handle = evt->data.evt_le_connection_opened.connection;
 				_main_state = STATE_CONNECTED;
-				gecko_cmd_le_connection_set_timing_parameters(_conn_handle, conn_interval,
-						conn_interval, 0, 200, 0, 0xFFFF);
+//				gecko_cmd_le_connection_set_timing_parameters(_conn_handle, conn_interval,
+//						conn_interval, 0, 200, 0, 0xFFFF);
 				_role = ROLE_SERVER_SLAVE;
 			}
 	        current_encounter = encounters + (c_fifo_last_idx & IDX_MASK);
@@ -758,20 +781,25 @@ void spp_client_main(void) {
 
 		case gecko_evt_le_connection_closed_id:
 			printLog("DISCONNECTED!\r\n");
-			// compute shared secret
-            X25519_calc_shared_secret(shared_key, private_key, current_encounter->public_key);
-            memcpy(current_encounter->public_key, shared_key, 32);
-            // turnoff speakerr or microphone
-			unlinkPRS();
-			if (pdm_on) {
-				pdm_pause();
-				pdm_on = false;
+			printLog("_role, _client_type: %d, %d\r\n", _role, _client_type);
+            if ( (_role==0) || ((_role==1) && (_client_type==0))) {
+    			// compute shared secret
+                X25519_calc_shared_secret(shared_key, private_key, current_encounter->public_key);
+                memcpy(current_encounter->public_key, shared_key, 32);
+            	// turnoff speaker or microphone
+
+				printLog("client_type: %d, role: %d\r\n", _client_type, _role);
+				unlinkPRS();
+				if (pdm_on) {
+					pdm_pause();
+					pdm_on = false;
+				}
+				// Get usound data and record encounter in fifo
+				// record_tof(current_encounter);
+				print_encounter(c_fifo_last_idx & IDX_MASK);
+				c_fifo_last_idx++;  // this actually saves the data in the fifo
 			}
-			// Get usound data and record encounter in fifo
-			record_tof(current_encounter);
-			print_encounter(c_fifo_last_idx&IDX_MASK);
-			c_fifo_last_idx++;  // this actually saves the data in the fifo
-			// reset everything
+            // reset everything
 			reset_variables();
 			SLEEP_SleepBlockEnd(sleepEM2);  // Enable sleeping after disconnect
 			gecko_cmd_hardware_set_soft_timer(32768<<1, RESTART_TIMER, true);
@@ -809,19 +837,19 @@ void spp_client_main(void) {
 					// Service found, next search for characteristics
 					gecko_cmd_gatt_discover_characteristics(_conn_handle,
 							_service_handle);
-					_main_state = FIND_CHAR;
+					_main_state = SEND_0;
 				} else {
 					// No service found -> disconnect
 					printLog("SPP service not found?\r\n");
 					gecko_cmd_le_connection_close(_conn_handle);
 				}
 				break;
-			case FIND_CHAR:
+			case FIND_SPP:
 				if (_char_handle > 0) {
 					// Char found, turn on indications
 					gecko_cmd_gatt_set_characteristic_notification(_conn_handle,
 							_char_handle, gatt_notification);
-					_main_state = SEND_0;
+					_main_state = ENABLE_NOTIF;
 				} else {
 					// No characteristic found? -> disconnect
 					printLog("SPP char not found?\r\n");
@@ -829,8 +857,15 @@ void spp_client_main(void) {
 				}
 				break;
 			case SEND_0:
-				_main_state = ENABLE_NOTIF;
-				send_rw_client('0');
+				if (_char_rw_handle > 0) {
+					_main_state = FIND_SPP;
+					send_rw_client('0');
+				} else {
+					// No characteristic found? -> disconnect
+					printLog("RW char not found?\r\n");
+					gecko_cmd_le_connection_close(_conn_handle);
+
+				}
 				break;
 			case ENABLE_NOTIF:
 				_main_state = DATA_MODE;
@@ -908,7 +943,14 @@ void spp_client_main(void) {
 				_main_state = SCAN_ADV;
 				break;
 			case HEARTBEAT_TIMER:
-				// printLog("*********** check if reset needed\r\n");
+				if ((_role == ROLE_SERVER_SLAVE)
+						&& (_client_type != CLIENT_IS_BTDEV)) {
+					if (_main_state != STATE_SPP_MODE) {
+						printLog(
+								"*********** check if reset needed conn_handle %d\r\n",
+								_conn_handle);
+					}
+				}
 				if (reset_needed) {
 					gecko_cmd_le_connection_close(_conn_handle);
 				}
@@ -930,7 +972,9 @@ void spp_client_main(void) {
 						_main_state = STATE_SPP_MODE;
 						SLEEP_SleepBlockBegin(sleepEM2); // Disable sleeping
 						printLog("SPP Mode ON\r\n");
-				        linkPRS();
+						printLog("Client Type: %d\r\n", _client_type);
+						if (_client_type == CLIENT_IS_BTDEV) linkPRS();
+						// linkPRS();
 						// pdm_start();
 						// pdm_on = true;
 					} else {
@@ -948,8 +992,8 @@ void spp_client_main(void) {
 			struct gecko_msg_gatt_server_attribute_value_evt_t *v;
 			v = &(evt->data.evt_gatt_server_attribute_value);
 			if (v->attribute == gattdb_Read_Write) {
-				int c = evt->data.evt_gatt_server_attribute_value.value.data[0];
-				printLog("new rw value %c, v %c\r\n", c, v->value.data[0]);
+				int c = v->value.data[0];
+				printLog("new rw value %c\r\n", c);
 				parse_bt_command(c);
 			} else if (v->attribute == gattdb_gatt_spp_data) {
 				if (_client_type == CLIENT_IS_BTDEV) {
@@ -965,22 +1009,23 @@ void spp_client_main(void) {
 									v->value.data + 1, 32);
 							printLog("got public key\r\n");
 						} else {
-							// receive time data and fill array
-							int16_t *time_data;
-							time_data = left_t + _data_idx;
-							memcpy((uint8_t *) time_data,
-									v->value.data + 1, 4);
-							time_data = right_t + _data_idx;
-							memcpy((uint8_t *) time_data,
-									v->value.data + 5, 4);
-							_data_idx += 2;
+							if (v->value.len>1) {
+								printLog("Got usound data, sharedCount: %d\r\n", sharedCount);
+								int16_t *usound_data = (int16_t *) (v->value.data + 2);
+								current_encounter->usound.n = v->value.data[1];
+								current_encounter->usound.left = usound_data[0];
+								current_encounter->usound.left_irq = usound_data[1];
+								current_encounter->usound.right = usound_data[2];
+								current_encounter->usound.right_irq = usound_data[3];
+							}
 						}
 						prev_rtcc = t;
 						prev_shared_count = prev_rtcc;
 						send_spp_data();
 						gecko_cmd_le_connection_get_rssi(_conn_handle);
 					}
-				} else if (_client_type == CLIENT_IS_COMPUTER) {
+				// } else if (_client_type == CLIENT_IS_COMPUTER) {
+				} else  {
 					process_server_spp_from_computer(evt, sending_ota, false);
 
 				}
