@@ -24,6 +24,8 @@
 #define TAPER
 extern float pulse_width;
 
+#define C4
+
 // float pulse_width = 5e-3; /**< Input: Square Chirp Duration, in seconds **/
 float dutyCycle = 0.5; /**<  **/
 int numWaves; /**< Calculated: Number of waves in the Square Chirp **/
@@ -130,9 +132,17 @@ void init_speaker(void) {
 	//timer1 to speaker pin
 	GPIO->TIMERROUTE[1].ROUTEEN = GPIO_TIMER_ROUTEEN_CC1PEN; // | GPIO_TIMER_ROUTEEN_CC0PEN
 //  GPIO->TIMERROUTE[0].CC0ROUTE = (gpioPortD << _GPIO_TIMER_CC0ROUTE_PORT_SHIFT) | (2 << _GPIO_TIMER_CC0ROUTE_PIN_SHIFT);
+#ifdef D3
 	GPIO->TIMERROUTE[1].CC1ROUTE =
 			(gpioPortD << _GPIO_TIMER_CC1ROUTE_PORT_SHIFT)
 					| (3 << _GPIO_TIMER_CC1ROUTE_PIN_SHIFT);
+#endif
+#ifdef C4
+	GPIO_PinModeSet(gpioPortC, 4, gpioModePushPull, 0);     // SPKR_POS
+	GPIO->TIMERROUTE[1].CC1ROUTE =
+			(gpioPortC << _GPIO_TIMER_CC1ROUTE_PORT_SHIFT)
+					| (4 << _GPIO_TIMER_CC1ROUTE_PIN_SHIFT);
+#endif
 }
 
 /*

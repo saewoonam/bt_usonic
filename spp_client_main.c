@@ -42,18 +42,19 @@
  **************************************************************************************************/
 
 #define DISCONNECTED	0
-#define SCAN_ADV		  1
+#define SCAN_ADV		1
 #define FIND_SERVICE	2
 #define SEND_0			3
-#define FIND_SPP		  4
+#define FIND_SPP		4
 #define ENABLE_NOTIF 	5
-#define DATA_MODE		  6
-#define DISCONNECTING 7
-#define STATE_CONNECTED   8
-#define STATE_SPP_MODE 9
-#define ROLE_UNKNOWN -1
-#define ROLE_CLIENT_MASTER 0
-#define ROLE_SERVER_SLAVE 1
+#define DATA_MODE		6
+#define DISCONNECTING 	7
+#define STATE_CONNECTED 8
+#define STATE_SPP_MODE 	9
+#define ADV_ONLY		10
+#define ROLE_UNKNOWN 		-1
+#define ROLE_CLIENT_MASTER 	0
+#define ROLE_SERVER_SLAVE 	1
 
 #define CLIENT_IS_BTDEV		0
 #define CLIENT_IS_COMPUTER	1
@@ -133,6 +134,9 @@ bool pdm_on = false;
 
 int32_t k_goertzel = 276;
 int32_t k_speaker = 276;
+int8_t k_speaker_offsets[12];
+int8_t k_goertzel_offsets[12];
+
 float pulse_width = 1.0e-3;
 int out=0;
 bool distant=false;
@@ -216,7 +220,7 @@ static void reset_variables() {
 
 // void get_local_mac(void);
 int process_scan_response(
-		struct gecko_msg_le_gap_scan_response_evt_t *pResp);
+		struct gecko_msg_le_gap_scan_response_evt_t *pResp, uint8_t status);
 void start_adv(void);
 void setup_adv(void);
 
@@ -380,18 +384,22 @@ void parse_bt_command(uint8_t c) {
 		send_ota_uint8(_min_packet_size);
         break;
 	}
-//	case 'E':{
-//		mode = MODE_ENCOUNTER;
-//		write_flash = false;
-//		printLog("Set to mode to ENCOUNTER\r\n");
-//        break;
-//	}
-//	case 'R':{
-//		mode = MODE_RAW;
-//		write_flash = false;
-//		printLog("Set to mode to RAW\r\n");
-//        break;
-//	}
+ 	case 'E':{
+		// mode = MODE_ENCOUNTER;
+		write_flash = false;
+		_status &= ~(1 << 3); // clear data collection mode
+		update_counts_status();
+		printLog("Set to mode to ENCOUNTER\r\n");
+		break;
+	}
+	case 'R': {
+		// mode = MODE_RAW;
+		write_flash = false;
+		_status |= (1 << 3); // set data collection mode to raw
+		update_counts_status();
+		printLog("Set to mode to RAW\r\n");
+		break;
+	}
 //	case 'm':{
 //		uint8_t value=mode;
 //		send_ota_uint8(value);
@@ -431,6 +439,13 @@ void parse_bt_command(uint8_t c) {
 		send_ota_uint32(ts);
 		send_ota_uint32(_time_info.time_overflow);
 		printLog("ts, overflow: %ld, %ld\r\n", ts, _time_info.time_overflow);
+		break;
+	}
+	case 'a': {
+		printLog("Send ota time info\r\n");
+		send_ota_uint32(_time_info.epochtimesync);
+		send_ota_uint32(_time_info.offset_time);
+		send_ota_uint32(_time_info.offset_overflow);
 		break;
 	}
 	case 'C': {
@@ -718,7 +733,7 @@ void spp_client_main(void) {
 			// if (true) {
 				// printLog("_main_state %d\r\n", _main_state);
 				// Process scan responses: this function returns 1 if we found the service we are looking for
-				if (process_scan_response(&(evt->data.evt_le_gap_scan_response))
+				if (process_scan_response(&(evt->data.evt_le_gap_scan_response), _status)
 						> 0) {
 					struct gecko_msg_le_gap_connect_rsp_t *pResp;
 

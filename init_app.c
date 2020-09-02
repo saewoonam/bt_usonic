@@ -30,7 +30,7 @@
 void initApp(void)
 {
   // Enable PTI
-  configEnablePti();
+  // configEnablePti();
 
 #if (HAL_I2CSENSOR_ENABLE)
   // Initialize I2C peripheral
