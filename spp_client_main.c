@@ -134,8 +134,8 @@ bool pdm_on = false;
 
 int32_t k_goertzel = 276;
 int32_t k_speaker = 276;
-int8_t k_speaker_offsets[12];
-int8_t k_goertzel_offsets[12];
+uint8_t k_speaker_offsets[12];
+uint8_t k_goertzel_offsets[12];
 
 float pulse_width = 1.0e-3;
 int out=0;
@@ -165,8 +165,11 @@ uint32_t p_fifo_last_idx=0;
 
 // storage related
 bool write_flash = false;
-
 bool mark_set = false;
+
+// mic and spkr related
+bool update_k_goertzel=true;
+bool update_k_speaker=true;
 
 // bt connection
 uint8 _conn_handle = 0xFF;
@@ -223,6 +226,7 @@ int process_scan_response(
 		struct gecko_msg_le_gap_scan_response_evt_t *pResp, uint8_t status);
 void start_adv(void);
 void setup_adv(void);
+void set_adv_params(uint16_t *params);
 
 void record_tof(Encounter_record_v2 *current_encounter);
 
@@ -293,7 +297,7 @@ static void send_spp_data() {
 	uint8 len = 1;
 	uint16 result;
 	uint8_t temp[33];
-	printLog("send spp data, got %d\r\n", sharedCount);
+	// printLog("send spp data, got %d\r\n", sharedCount);
 	if (sharedCount==1) {
 		printLog("Got the first packet from the client, sending: %d\r\n", sharedCount);
 		memcpy(temp+1, public_key, 32);
@@ -468,7 +472,7 @@ void parse_bt_command(uint8_t c) {
 //	    setup_next_minute();
 //		break;
 //	}
-	case 'B': {
+	case 'B': { //bt scan parameters
 		uint16_t *scan_params;
 
 		scan_params = (uint16_t *) gecko_cmd_gatt_server_read_attribute_value(gattdb_gatt_spp_data,0 )->value.data;
@@ -476,7 +480,7 @@ void parse_bt_command(uint8_t c) {
 		// startObserving(scan_params[0], scan_params[1]);
 		break;
 	}
-	case 'P': {
+	case 'P': {  //connection parameters
 		uint16_t *conn_params;
 
 		conn_params = (uint16_t *) gecko_cmd_gatt_server_read_attribute_value(gattdb_gatt_spp_data,0 )->value.data;
@@ -484,6 +488,15 @@ void parse_bt_command(uint8_t c) {
 		// setConnectionTiming(conn_params);
 		break;
 	}
+	case 'b': { //bt advertising parameters
+		uint16_t *adv_params;
+
+		adv_params = (uint16_t *) gecko_cmd_gatt_server_read_attribute_value(gattdb_gatt_spp_data,0 )->value.data;
+		printLog("Change bluetooth adv parameters interval, window: %u, %u\r\n", adv_params[0], adv_params[1]);
+		set_adv_params(adv_params);
+		break;
+	}
+
 	case 'O': {
 		// uint8_t time_evt[32];
 		uint32_t *timedata;
@@ -889,6 +902,8 @@ void spp_client_main(void) {
 		        linkPRS();
 				// Send rw command that a bt dev is trying to connect
 				sharedCount = 0;
+				// immediately try to update k_goertzel
+				update_k_goertzel = true;
 				send_spp_data_client();
 				break;
 			default:
@@ -918,6 +933,8 @@ void spp_client_main(void) {
 			if (evt->data.evt_gatt_characteristic_value.characteristic
 					== _char_handle) {
 				if (evt->data.evt_gatt_characteristic_value.value.len > 0) {
+					// immediately try to update k_goertzel
+					update_k_goertzel = true;
 					uint32_t t = RTCC_CounterGet();
 					sharedCount =
 							evt->data.evt_gatt_characteristic_value.value.data[0];
@@ -1038,6 +1055,8 @@ void spp_client_main(void) {
 						prev_shared_count = prev_rtcc;
 						send_spp_data();
 						gecko_cmd_le_connection_get_rssi(_conn_handle);
+						printLog("Update k_speaker offset[%d] = %d\r\n",
+								sharedCount>>1, k_speaker_offsets[sharedCount>>1]);
 					}
 				// } else if (_client_type == CLIENT_IS_COMPUTER) {
 				} else  {
@@ -1048,10 +1067,10 @@ void spp_client_main(void) {
 		}
 			break;
 		case gecko_evt_le_connection_rssi_id: {
-			uint32_t t = RTCC_CounterGet();
-			printLog("%lu %lu %lu rssi: %d\r\n", t,
-					t - prev_rtcc, t-prev_shared_count, evt->data.evt_le_connection_rssi.rssi);
-			prev_rtcc = t;
+//			uint32_t t = RTCC_CounterGet();
+//			printLog("%lu %lu %lu rssi: %d\r\n", t,
+//					t - prev_rtcc, t-prev_shared_count, evt->data.evt_le_connection_rssi.rssi);
+//			prev_rtcc = t;
 			current_encounter->rssi_values[(_rssi_count++)%RSSI_LIST_SIZE] = evt->data.evt_le_connection_rssi.rssi;
 			break;
 		}

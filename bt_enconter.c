@@ -19,8 +19,8 @@ extern uint8 _conn_handle;
 //extern uint32_t encounter_count;
 extern uint8_t local_mac[6];
 extern uint8 serviceUUID[16];
-extern int8_t k_speaker_offsets[12];
-// extern int8_t k_goertzel_offsets[12];
+extern uint8_t k_speaker_offsets[12];
+extern uint8_t k_goertzel_offsets[12];
 
 void update_public_key(void);
 int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
@@ -152,6 +152,13 @@ void setup_adv(void) {
 	gecko_cmd_le_gap_set_advertise_timing(HANDLE_ADV, 320, 320, 0, 0);
 }
 
+void print_offsets(uint8_t *offsets) {
+	for (int i=0; i<12; i++) {
+		printLog("%d ", offsets[i]);
+	}
+	printLog("\r\n");
+}
+
 void start_adv(void) {
 #ifdef UPDATE_KEY_WITH_ADV
 	update_public_key();
@@ -163,17 +170,20 @@ void start_adv(void) {
 	get_local_mac();
 #endif
 	calc_k_offsets(local_mac, k_speaker_offsets);
+	printLog("k speaker offsets: ");
+	print_offsets(k_speaker_offsets);
+
 	//	/* Set custom advertising data */
-//	gecko_cmd_le_gap_bt5_set_adv_data(HANDLE_ADV, 0, len, pData);
-//
-//	/* Set 0 dBm Transmit Power */
-//	gecko_cmd_le_gap_set_advertise_tx_power(HANDLE_ADV, 0);
-//	gecko_cmd_le_gap_set_advertise_configuration(HANDLE_ADV, 0x04);
-//
-//	/* Set advertising parameters. 200ms (320/1.6) advertisement interval. All channels used.
-//	 * The first two parameters are minimum and maximum advertising interval, both in
-//	 * units of (milliseconds * 1.6).  */
-//	gecko_cmd_le_gap_set_advertise_timing(HANDLE_ADV, 320, 320, 0, 0);
+	//	gecko_cmd_le_gap_bt5_set_adv_data(HANDLE_ADV, 0, len, pData);
+	//
+	//	/* Set 0 dBm Transmit Power */
+	//	gecko_cmd_le_gap_set_advertise_tx_power(HANDLE_ADV, 0);
+	//	gecko_cmd_le_gap_set_advertise_configuration(HANDLE_ADV, 0x04);
+	//
+	//	/* Set advertising parameters. 200ms (320/1.6) advertisement interval. All channels used.
+	//	 * The first two parameters are minimum and maximum advertising interval, both in
+	//	 * units of (milliseconds * 1.6).  */
+	//	gecko_cmd_le_gap_set_advertise_timing(HANDLE_ADV, 320, 320, 0, 0);
 
 	/* Start advertising in user mode */
 	uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
@@ -185,6 +195,12 @@ void start_adv(void) {
 	// le_gap_non_connectable)
 	->result;
 	printLog("Start adv result: %x\r\n", res);
+}
+
+void  set_adv_params(uint16_t *params) {
+    gecko_cmd_le_gap_stop_advertising(HANDLE_ADV);
+	gecko_cmd_le_gap_set_advertise_timing(HANDLE_ADV, params[0], params[1], 0, 0);
+	start_adv();
 }
 
 void startObserving(uint16_t interval, uint16_t window) {
@@ -315,6 +331,11 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 			if (idx >= 0) {
 				// printLog("Connected during this minute already\r\n");
 				ad_match_found = 0;
+			} else {
+				// calculate k_goertzels
+				calc_k_offsets(pResp->address.addr, k_goertzel_offsets);
+				printLog("k goertzel offsets: ");
+				print_offsets(k_goertzel_offsets);
 			}
 		}
 	}

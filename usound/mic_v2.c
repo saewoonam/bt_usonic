@@ -17,6 +17,9 @@
 extern uint32_t prev_rtcc;
 extern float pulse_width;
 extern int out;
+extern bool update_k_goertzel;
+extern uint8_t sharedCount;
+extern uint8_t k_goertzel_offsets[12];
 
 #define PDM_INTERRUPTS
 #define GOERTZEL
@@ -199,14 +202,20 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 			recording = false;
 
 #ifdef GOERTZEL
-			uint32_t t0 = RTCC_CounterGet();
+			// uint32_t t0 = RTCC_CounterGet();
+			if (update_k_goertzel) {
+				printLog("Update k_gooertzel, sc: %d offsets[%d] = %d\r\n", sharedCount,
+						sharedCount>>1, k_goertzel_offsets[sharedCount>>1]);
+				// reset update
+				update_k_goertzel = false;
+			}
 			float P_left = goertzel(left, k_goertzel);
 			float P_right =  goertzel(right, k_goertzel);
-
-			uint32_t curr = RTCC_CounterGet();
-			printf("%ld, %ld, %ld, %d ----:g[%ld]: %e, %e\r\n", curr, curr-prev_rtcc, curr-t0, sequenceNo,
-					k_goertzel, P_left, P_right);
-			prev_rtcc = curr;
+			uint32_t curr;
+//			uint32_t curr = RTCC_CounterGet();
+//			printf("%ld, %ld, %ld, %d ----:g[%ld]: %e, %e\r\n", curr, curr-prev_rtcc, curr-t0, sequenceNo,
+//					k_goertzel, P_left, P_right);
+//			prev_rtcc = curr;
 			if ((P_left > 2e3) || (P_right > 2e3)) {
 
 				calc_chirp_v2(k_goertzel, pulse_width, pdm_template,
@@ -252,7 +261,6 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 				// int right_w = width(corr, r_t, 0.5, &p2_r);
 				if (out == 2)
 					dump_array((uint8_t *) corr, BUFFER_SIZE << 1);
-				curr = RTCC_CounterGet();
 				if (out == 1)
 					dump_array((uint8_t *) left, BUFFER_SIZE << 1);
 				if (out == 1)
@@ -262,8 +270,12 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 
 //			printLog("%ld, %ld ----pk: (%d, %d), (%d, %d) width: %d, %d\r\n",
 //					curr, curr-prev_rtcc, left_t, p2_l, right_t, p2_r, left_w, right_w);
-				printLog("%ld, %ld ----pk: %d, %d\r\n", curr, curr - prev_rtcc,
-						l_t, r_t);
+
+				curr = RTCC_CounterGet();
+				printf("%ld, %ld ----:g[%ld]: %e, %e  pk: %d, %d\r\n ", curr,
+						curr - prev_rtcc, k_goertzel,
+						P_left, P_right, l_t, r_t);
+				prev_rtcc = curr;
 				insert(l_t, left_t);
 				insert(r_t, right_t);
 				// insert(p2_l, left_t);
