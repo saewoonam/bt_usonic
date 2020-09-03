@@ -116,6 +116,8 @@ void populateBuffers(int k_value);
 void startDMADRV_TMR(void);
 
 void update_public_key(void);
+void set_new_mac_address(void);
+void print_mac(uint8_t *addr);
 
 void setup_encounter_record(uint8_t* mac_addr);
 void process_ext_signals(uint32_t signals);
@@ -224,7 +226,7 @@ static void reset_variables() {
 	_rssi_count = 0;
 }
 
-// void get_local_mac(void);
+void get_local_mac(void);
 int process_scan_response(
 		struct gecko_msg_le_gap_scan_response_evt_t *pResp, uint8_t status);
 void start_adv(void);
@@ -680,6 +682,8 @@ void record_tof(Encounter_record_v2 *current_encounter) {
 	current_encounter->usound.right_irq = iqr;
 }
 
+#define PRIVATE
+
 void spp_client_main(void) {
 	uint32_t prev_shared_count = 0;
 	while (1) {
@@ -710,6 +714,9 @@ void spp_client_main(void) {
 		/* This boot event is generated when the system boots up after reset.
 		 * Here the system is set to start advertising immediately after boot procedure. */
 		case gecko_evt_system_boot_id:
+			get_local_mac();
+			printLog("Builtin mac: ");
+			print_mac(local_mac);
 			// Not sure this is the right place for speaker init stuff
 			populateBuffers(k_speaker);
 			startDMADRV_TMR();
@@ -728,14 +735,13 @@ void spp_client_main(void) {
 			gecko_cmd_gatt_set_max_mtu(247);
 			// set initial public key
 			update_public_key();
-
-			// Start discovery using the default 1M PHY
-			// Master_client mode
-			gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic);
+//			// Start discovery using the default 1M PHY
+//			// Master_client mode
+//			gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic);
 			_main_state = SCAN_ADV;
 			// Server_slave mode
 			setup_adv();
-			start_adv();
+			set_new_mac_address();
 
 //			gecko_cmd_le_gap_start_advertising(0, le_gap_general_discoverable,
 //					le_gap_undirected_connectable);
@@ -794,9 +800,6 @@ void spp_client_main(void) {
 				_main_state = FIND_SERVICE;
 				_role = ROLE_CLIENT_MASTER;
 
-#ifdef K_FROM_MAC
-				k_goertzel = calc_k_from_mac(evt->data.evt_le_connection_opened.address.addr);
-#endif
 //	    	    uint16_t result = gecko_cmd_le_gap_end_procedure()->result;
 //	    	    printLog("try to end scan, result: %x\r\n", result);
 			} else {
@@ -807,6 +810,8 @@ void spp_client_main(void) {
 				_role = ROLE_SERVER_SLAVE;
 			}
 	        current_encounter = encounters + (c_fifo_last_idx & IDX_MASK);
+	        printLog("open connection type: %d mac: ", evt->data.evt_le_connection_opened.address_type);
+	        print_mac(evt->data.evt_le_connection_opened.address.addr);
 	        setup_encounter_record(evt->data.evt_le_connection_opened.address.addr);
 			break;
 
@@ -969,7 +974,7 @@ void spp_client_main(void) {
 			switch (evt->data.evt_hardware_soft_timer.handle) {
 			case RESTART_TIMER:
 				// Restart discovery using the default 1M PHY
-				gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic);
+				//gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic);
 				start_adv();
 
 //				gecko_cmd_le_gap_start_advertising(0, le_gap_general_discoverable,

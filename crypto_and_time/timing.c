@@ -15,6 +15,7 @@
 
 extern bool write_flash;
 void flash_store(void);
+void set_new_mac_address(void);
 
 
 #define TICKS_PER_SECOND 32768
@@ -73,14 +74,15 @@ uint32_t epoch_day(void) {
 void update_next_minute(void) {
 	static uint32_t day = 0;
 	_time_info.next_minute +=60000;
-	//  Change key daily... for now.
+	set_new_mac_address();
+
+	//  Change stuff daily... if desired.
 	if (day==0) {
 		day = epoch_day();
 	}
 	uint32_t current_day = epoch_day();
 	if (current_day>day) {
-		update_public_key();
-		// newRandAddress();
+		// update_public_key();
 		day = current_day;
 	}
 	if (write_flash) flash_store();

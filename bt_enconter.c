@@ -118,33 +118,13 @@ void print_mac(uint8_t *addr) {
 	printLog("%2.2x\r\n", addr[0]);
 }
 
-void set_new_mac_address(void) {
-	bd_addr rnd_addr;
-	struct gecko_msg_le_gap_set_advertise_random_address_rsp_t *response;
-	// struct gecko_msg_le_gap_stop_advertising_rsp_t *stop_response;
-	//struct gecko_msg_le_gap_set_advertise_configuration_rsp_t *config_response;
-	struct gecko_msg_system_get_random_data_rsp_t *rnd_response;
-
-	//stop_response =
-	gecko_cmd_le_gap_stop_advertising(HANDLE_ADV);
-
-	do {
-		rnd_response = gecko_cmd_system_get_random_data(6);
-		rnd_response->data.data[5] &= 0x3F; // Last two bits must 0 for valid random mac address
-		memcpy(rnd_addr.addr, rnd_response->data.data, 6);
-		response = gecko_cmd_le_gap_set_advertise_random_address(HANDLE_ADV,
-				0x02, rnd_addr);
-	} while (response->result > 0);
-	memcpy(local_mac, rnd_addr.addr, 6);
-}
-
 
 void setup_adv(void) {
-//	uint8_t len = sizeof(etAdvData);
-//	uint8_t *pData = (uint8_t*) (&etAdvData);
+	uint8_t len = sizeof(etAdvData);
+	uint8_t *pData = (uint8_t*) (&etAdvData);
 //	/* Set custom advertising data */
-//	uint16_t res = gecko_cmd_le_gap_bt5_set_adv_data(HANDLE_ADV, 0, len, pData)->result;
-//	printLog("Set adv data %u\r\n", res);
+	uint16_t res = gecko_cmd_le_gap_bt5_set_adv_data(HANDLE_ADV, 0, len, pData)->result;
+	printLog("Set adv data %u\r\n", res);
 
 	/* Set 0 dBm Transmit Power */
 	gecko_cmd_le_gap_set_advertise_tx_power(HANDLE_ADV, 0);
@@ -162,18 +142,9 @@ void print_offsets(uint8_t *offsets) {
 	}
 	printLog("\r\n");
 }
-
 #define PRIVATE
-void start_adv(void) {
-#ifdef UPDATE_KEY_WITH_ADV
-	update_public_key();
-#endif
-#ifdef PRIVATE
-	set_new_mac_address();
 
-#else
-	get_local_mac();
-#endif
+void start_adv(void) {
 	printLog("local mac addr: ");
 	print_mac(local_mac);
 	calc_k_offsets(local_mac, k_speaker_offsets);
@@ -194,19 +165,56 @@ void start_adv(void) {
 
 	/* Start advertising in user mode */
 	// advertise with name and custom service
-#ifdef PRIVATE
+#ifndef PRIVATE
 	uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
 			le_gap_general_discoverable,
 			le_gap_undirected_connectable)->result;
 #else
 	uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV, le_gap_user_data,
-			le_gap_undirected_connectable)
-	//le_gap_connectable_non_scannable)
-	//le_gap_connectable_scannable)
-	//le_gap_non_connectable)
+	// le_gap_undirected_connectable)
+	// le_gap_connectable_non_scannable)
+	le_gap_connectable_scannable)
+	// le_gap_non_connectable)
 	->result;
 #endif
 	printLog("Start adv result: %x\r\n", res);
+}
+
+void set_new_mac_address(void) {
+	gecko_cmd_le_gap_stop_advertising(HANDLE_ADV);
+	gecko_cmd_le_gap_end_procedure();
+
+#ifdef PRIVATE
+	bd_addr rnd_addr;
+	struct gecko_msg_le_gap_set_advertise_random_address_rsp_t *response;
+	// struct gecko_msg_le_gap_stop_advertising_rsp_t *stop_response;
+	//struct gecko_msg_le_gap_set_advertise_configuration_rsp_t *config_response;
+	struct gecko_msg_system_get_random_data_rsp_t *rnd_response;
+	do {
+		rnd_response = gecko_cmd_system_get_random_data(6);
+		//  for valid 0x03 type addresses
+		// rnd_response->data.data[5] &= 0x3F; // Last two bits must 0 for valid random mac address
+		// what about 0x01?
+		rnd_response->data.data[5] |= 0xC0; // Last two bits must 0 for valid random mac address
+		memcpy(rnd_addr.addr, rnd_response->data.data, 6);
+		response = gecko_cmd_le_gap_set_advertise_random_address(HANDLE_ADV,
+				0x01, rnd_addr);
+		printLog("create random address result: %x, ", response->result);
+		print_mac(response->address_out.addr);
+	} while (response->result > 0);
+	// if type is 0x02
+	memcpy(local_mac, response->address_out.addr, 6);
+	// if type is 0x03
+	// memcpy(local_mac, rnd_addr.addr, 6);
+#else
+	get_local_mac();
+#endif
+	// Slave_server mode
+	start_adv();
+	// Start discovery using the default 1M PHY
+	// Master_client mode
+	gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic);
+
 }
 
 void  set_adv_params(uint16_t *params) {
@@ -291,12 +299,13 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 	int ad_len;
 	int ad_type;
 
-	printLog("Process scan ");
-	print_mac(pResp->address.addr);
+	// printLog("Process scan ");
+	// print_mac(pResp->address.addr);
 	while (i < (pResp->data.len - 1)) {
 
 		ad_len = pResp->data.data[i];
 		ad_type = pResp->data.data[i + 1];
+		// printLog("ad_len, ad_type  %d, %d\r\n", ad_len, ad_type);
 #ifdef NAME_MATCH
 		char name[32];
 		char dev_name[]="Empty Ex";
@@ -432,10 +441,8 @@ void setup_encounter_record(uint8_t* mac_addr) {
 		memcpy(current_encounter->mac, mac_addr, 6);
 
 		printLog("remote MAC address in setup: ");
-		for (int i = 0; i < 5; i++) {
-			printLog("%02X:", mac_addr[i]);
-		}
-		printLog("%02X\r\n", mac_addr[5]);
+		print_mac(mac_addr);
+
 		current_encounter->minute = epoch_minute;
 		// current_encounter->version = 0xFF;
 		// c_fifo_last_idx++;
