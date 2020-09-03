@@ -23,6 +23,8 @@ extern uint8_t k_goertzel_offsets[12];
 
 #define PDM_INTERRUPTS
 #define GOERTZEL
+#define K_OFFSET	276
+#define K_OFFSET2	428
 
 
 // PDM stuff
@@ -203,12 +205,6 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 
 #ifdef GOERTZEL
 			// uint32_t t0 = RTCC_CounterGet();
-			if (update_k_goertzel) {
-				printLog("Update k_gooertzel, sc: %d offsets[%d] = %d\r\n", sharedCount,
-						sharedCount>>1, k_goertzel_offsets[sharedCount>>1]);
-				// reset update
-				update_k_goertzel = false;
-			}
 			float P_left = goertzel(left, k_goertzel);
 			float P_right =  goertzel(right, k_goertzel);
 			uint32_t curr;
@@ -268,7 +264,7 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 				memset(left, 0, BUFFER_SIZE << 1);
 				memset(right, 0, BUFFER_SIZE << 1);
 
-//			printLog("%ld, %ld ----pk: (%d, %d), (%d, %d) width: %d, %d\r\n",
+//				printLog("%ld, %ld ----pk: (%d, %d), (%d, %d) width: %d, %d\r\n",
 //					curr, curr-prev_rtcc, left_t, p2_l, right_t, p2_r, left_w, right_w);
 
 				curr = RTCC_CounterGet();
@@ -298,6 +294,16 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 				prev_rtcc = curr;
 			}
 #endif
+			// Update the k_goertzel
+			if (update_k_goertzel) {
+				printLog("Update k_gooertzel, sc: %d k_goertzel %ld\r\n",
+						sharedCount, k_goertzel);
+				// reset update
+				k_goertzel = k_goertzel_offsets[sharedCount >> 1] + K_OFFSET;
+				// k_goertzel =  k_goertzel_offsets[2] + K_OFFSET;
+				update_k_goertzel = false;
+			}
+
 		}
 	}
 	return 0;

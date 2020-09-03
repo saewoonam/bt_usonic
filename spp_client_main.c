@@ -1,4 +1,4 @@
-/***********************************************************************************************//**
+/*************************************************************************************************
  * \file   spp_client_main.c
  * \brief  SPP client example
  *
@@ -64,6 +64,9 @@
 #define LOG_RESET (1<<4)
 
 #define RSSI_LIST_SIZE (12)
+
+#define K_OFFSET	276
+#define K_OFFSET2	428
 
 const char *version_str = "Version: " __DATE__ " " __TIME__;
 const char *ota_version = "2.0";
@@ -1006,6 +1009,7 @@ void spp_client_main(void) {
 						printLog("SPP Mode ON\r\n");
 						printLog("Client Type: %d\r\n", _client_type);
 						if (_client_type == CLIENT_IS_BTDEV) linkPRS();
+						k_speaker = k_speaker_offsets[0] + K_OFFSET;
 						// linkPRS();
 						// pdm_start();
 						// pdm_on = true;
@@ -1055,8 +1059,9 @@ void spp_client_main(void) {
 						prev_shared_count = prev_rtcc;
 						send_spp_data();
 						gecko_cmd_le_connection_get_rssi(_conn_handle);
-						printLog("Update k_speaker offset[%d] = %d\r\n",
-								sharedCount>>1, k_speaker_offsets[sharedCount>>1]);
+						k_speaker = k_speaker_offsets[sharedCount>>1] + K_OFFSET;
+						populateBuffers(k_speaker);
+						printLog("Update index: %d k_speaker: %ld\r\n", sharedCount>>1, k_speaker);
 					}
 				// } else if (_client_type == CLIENT_IS_COMPUTER) {
 				} else  {

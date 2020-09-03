@@ -104,11 +104,18 @@ int32_t calc_k_offset(uint8_t index) {
 
 void calc_k_offsets(uint8_t *mac, uint8_t *offsets) {
 	for (int i = 0; i < 6; i++) {
-		offsets[i << 2] = calc_k_offset(mac[i] & 0xF);
-		offsets[(i << 2) + 1] = calc_k_offset((mac[i] >> 4) & 0xF);
-		printLog("mac[%d] %x: %d %d\r\n", i, mac[i], offsets[i << 2],
-				offsets[(i << 2) + 1]);
+		offsets[i << 1] = calc_k_offset(mac[i] & 0xF);
+		offsets[(i << 1) + 1] = calc_k_offset((mac[i] >> 4) & 0xF);
+//		printLog("mac[%d] %x: %d %d\r\n", i, mac[i], offsets[i << 1],
+//				offsets[(i << 1) + 1]);
 	}
+}
+
+void print_mac(uint8_t *addr) {
+	for (int i = 0; i < 5; i++) {
+		printLog("%2.2x:", addr[5 - i]);
+	}
+	printLog("%2.2x\r\n", addr[0]);
 }
 
 void set_new_mac_address(void) {
@@ -129,11 +136,8 @@ void set_new_mac_address(void) {
 				0x02, rnd_addr);
 	} while (response->result > 0);
 	memcpy(local_mac, rnd_addr.addr, 6);
-#ifdef K_FROM_MAC
-	k_speaker = calc_k_from_mac(local_mac);
-#endif
-	//  gecko_cmd_le_gap_start_advertising(HANDLE_ADV, le_gap_user_data, le_gap_non_connectable);
 }
+
 
 void setup_adv(void) {
 //	uint8_t len = sizeof(etAdvData);
@@ -159,18 +163,21 @@ void print_offsets(uint8_t *offsets) {
 	printLog("\r\n");
 }
 
+#define PRIVATE
 void start_adv(void) {
 #ifdef UPDATE_KEY_WITH_ADV
 	update_public_key();
 #endif
-#ifdef RANDOM_MAC
+#ifdef PRIVATE
 	set_new_mac_address();
 
 #else
 	get_local_mac();
 #endif
+	printLog("local mac addr: ");
+	print_mac(local_mac);
 	calc_k_offsets(local_mac, k_speaker_offsets);
-	printLog("k speaker offsets: ");
+	printLog("*************k speaker offsets: ");
 	print_offsets(k_speaker_offsets);
 
 	//	/* Set custom advertising data */
@@ -186,14 +193,19 @@ void start_adv(void) {
 	//	gecko_cmd_le_gap_set_advertise_timing(HANDLE_ADV, 320, 320, 0, 0);
 
 	/* Start advertising in user mode */
+	// advertise with name and custom service
+#ifdef PRIVATE
 	uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
 			le_gap_general_discoverable,
-			// uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV, le_gap_user_data,
+			le_gap_undirected_connectable)->result;
+#else
+	uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV, le_gap_user_data,
 			le_gap_undirected_connectable)
-	// le_gap_connectable_non_scannable)
-	// le_gap_connectable_scannable)
-	// le_gap_non_connectable)
+	//le_gap_connectable_non_scannable)
+	//le_gap_connectable_scannable)
+	//le_gap_non_connectable)
 	->result;
+#endif
 	printLog("Start adv result: %x\r\n", res);
 }
 
@@ -279,7 +291,8 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 	int ad_len;
 	int ad_type;
 
-	// printLog("Process scan\r\n");
+	printLog("Process scan ");
+	print_mac(pResp->address.addr);
 	while (i < (pResp->data.len - 1)) {
 
 		ad_len = pResp->data.data[i];
@@ -309,7 +322,13 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 				ad_match_found = compare_mac(pResp->address.addr);
 			}
 		}
-
+		if (ad_type == 0x03) {
+			// Look for exposure notification
+			if ((pResp->data.data[i + 2] == 0x6F)
+					&& (pResp->data.data[i + 3] == 0xFD)) {
+				ad_match_found = compare_mac(pResp->address.addr);
+			}
+		}
 		// Jump to next AD record
 		i = i + ad_len + 1;
 	}
