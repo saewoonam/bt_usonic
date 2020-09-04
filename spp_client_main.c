@@ -133,6 +133,9 @@ void set_name(uint8_t *name);
 
 void readBatteryLevel(void);
 
+void timer0_prescale(int prescale);
+void play_speaker(void);
+
 // int32_t calc_k_from_mac(uint8_t *mac);
 
 bool pdm_on = false;
@@ -200,7 +203,7 @@ uint8_t local_mac[6];
 /* Default maximum packet size is 20 bytes. This is adjusted after connection is opened based
  * on the connection parameters */
 
-volatile int conn_interval = 64;
+volatile int conn_interval = 400; //64
 Encounter_record_v2 *current_encounter = encounters;
 static int8  _rssi_count = 0;
 
@@ -229,7 +232,7 @@ static void reset_variables() {
 void get_local_mac(void);
 int process_scan_response(
 		struct gecko_msg_le_gap_scan_response_evt_t *pResp, uint8_t status);
-void start_adv(void);
+void start_bt(void);
 void setup_adv(void);
 void set_adv_params(uint16_t *params);
 
@@ -261,6 +264,8 @@ static void send_rw_client(char cmd) {
 	printLog("Sent rw command: %c\r\n", cmd);
 }
 
+void unlinkPRS();
+
 static void send_spp_data_client() {
 	uint8 len = 1;
 	uint16 result;
@@ -271,8 +276,9 @@ static void send_spp_data_client() {
 		memcpy(temp+1, public_key, 32);
 		len = 33;
 	} else if (sharedCount==20) {
+		unlinkPRS();
 		printLog("send spp data client, got %d\r\n", sharedCount);
-		printLog("*******send usound _data_idx %d\r\n", _data_idx);
+		// printLog("*******send usound _data_idx %d\r\n", _data_idx);
 		record_tof(current_encounter);
 		temp[1] = current_encounter->usound.n;
 		uint16_t *usound_data = (uint16_t *) (temp+2);
@@ -460,6 +466,16 @@ void parse_bt_command(uint8_t c) {
 	case 'C': {
 		flash_erase();
 		// if (encounter_count==0) printLog("Flash is empty\r\n");
+		break;
+	}
+	case 'S': {
+		timer0_prescale(4);
+		k_speaker = 440;
+		pulse_width = 10e-3;
+		populateBuffers(k_speaker);
+		play_speaker();
+		timer0_prescale(0);
+		pulse_width = 1e-3;
 		break;
 	}
 //	case 'o': {
@@ -650,7 +666,7 @@ void print_encounter(int index) {
 // #define PRINT_T_ARRAY
 void record_tof(Encounter_record_v2 *current_encounter) {
 #ifdef PRINT_TIMES
-	printLog("--------n: %d\r\n", _data_idx);
+	printLog("--------n: %d, ", _data_idx);
 #ifdef PRINT_T_ARRAY
 	printLog("left_t: ");
 	for (int i=0; i<_data_idx; i++) {
@@ -664,7 +680,7 @@ void record_tof(Encounter_record_v2 *current_encounter) {
 	current_encounter->usound.left= med;
 	current_encounter->usound.left_irq = iqr;
 #ifdef PRINT_TIMES
-	printLog("--------left: %d, %d\r\n", med, iqr);
+	printLog("l: %d, %d, ", med, iqr);
 #ifdef PRINT_T_ARRAY
 	printLog("right_t: ");
 	for (int i=0; i<_data_idx; i++) {
@@ -675,7 +691,7 @@ void record_tof(Encounter_record_v2 *current_encounter) {
 #endif
 	iqr = IQR(right_t, _data_idx, &med);
 #ifdef PRINT_TIMES
-	printLog("--------right: %d, %d\r\n", med, iqr);
+	printLog("r: %d, %d\r\n", med, iqr);
 #endif
 	current_encounter->usound.n = _data_idx;
 	current_encounter->usound.right = med;
@@ -691,7 +707,7 @@ void spp_client_main(void) {
 		struct gecko_cmd_packet* evt;
 
 		// evt = gecko_wait_event();
-	    if (false) {
+	    if (true) {
 	      /* If SPP data mode is active, use non-blocking gecko_peek_event() */
 	      evt = gecko_peek_event();
 	      int c = RETARGET_ReadChar();
@@ -742,9 +758,6 @@ void spp_client_main(void) {
 			// Server_slave mode
 			setup_adv();
 			set_new_mac_address();
-
-//			gecko_cmd_le_gap_start_advertising(0, le_gap_general_discoverable,
-//					le_gap_undirected_connectable);
 
 			gecko_cmd_hardware_set_soft_timer(32768<<2, HEARTBEAT_TIMER, false);
 
@@ -817,14 +830,14 @@ void spp_client_main(void) {
 
 		case gecko_evt_le_connection_closed_id:
 			printLog("DISCONNECTED!\r\n");
-			printLog("_role, _client_type: %d, %d\r\n", _role, _client_type);
+			// printLog("_role, _client_type: %d, %d\r\n", _role, _client_type);
             if ( (_role==0) || ((_role==1) && (_client_type==0))) {
     			// compute shared secret
                 X25519_calc_shared_secret(shared_key, private_key, current_encounter->public_key);
                 memcpy(current_encounter->public_key, shared_key, 32);
             	// turnoff speaker or microphone
 
-				printLog("client_type: %d, role: %d\r\n", _client_type, _role);
+				// printLog("client_type: %d, role: %d\r\n", _client_type, _role);
 				unlinkPRS();
 				if (pdm_on) {
 					pdm_pause();
@@ -852,15 +865,15 @@ void spp_client_main(void) {
 			 * up to ATT_MTU-3 bytes can be sent at once  */
 			_max_packet_size = evt->data.evt_gatt_mtu_exchanged.mtu - 3;
 			_min_packet_size = _max_packet_size; // Try to send maximum length packets whenever possible
-			printLog("MTU exchanged: %d\r\n",
-					evt->data.evt_gatt_mtu_exchanged.mtu);
+			// printLog("MTU exchanged: %d\r\n",
+			//		evt->data.evt_gatt_mtu_exchanged.mtu);
 			break;
 
 		case gecko_evt_gatt_service_id:  // after connection handle looking for service
 			if (evt->data.evt_gatt_service.uuid.len == 16) {
 				if (memcmp(serviceUUID, evt->data.evt_gatt_service.uuid.data,
 						16) == 0) {
-					printLog("Service discovered\r\n");
+					// printLog("Service discovered\r\n");
 					_service_handle = evt->data.evt_gatt_service.service;
 				}
 			}
@@ -924,13 +937,13 @@ void spp_client_main(void) {
 			if (evt->data.evt_gatt_characteristic.uuid.len == 16) {
 				if (memcmp(charUUID,
 						evt->data.evt_gatt_characteristic.uuid.data, 16) == 0) {
-					printLog("Char SPP discovered\r\n");
+					// printLog("Char SPP discovered\r\n");
 					_char_handle =
 							evt->data.evt_gatt_characteristic.characteristic;
 				}
 				if (memcmp(charUUID_rw,
 						evt->data.evt_gatt_characteristic.uuid.data, 16) == 0) {
-					printLog("Char RW discovered\r\n");
+					// printLog("Char RW discovered\r\n");
 					_char_rw_handle =
 							evt->data.evt_gatt_characteristic.characteristic;
 				}
@@ -974,12 +987,7 @@ void spp_client_main(void) {
 			switch (evt->data.evt_hardware_soft_timer.handle) {
 			case RESTART_TIMER:
 				// Restart discovery using the default 1M PHY
-				//gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic);
-				start_adv();
-
-//				gecko_cmd_le_gap_start_advertising(0, le_gap_general_discoverable,
-//						le_gap_undirected_connectable);
-
+				start_bt();
 				_main_state = SCAN_ADV;
 				break;
 			case HEARTBEAT_TIMER:
@@ -1051,7 +1059,7 @@ void spp_client_main(void) {
 							printLog("got public key\r\n");
 						} else {
 							if (v->value.len>1) {
-								printLog("Got usound data, sharedCount: %d\r\n", sharedCount);
+								// printLog("Got usound data, sharedCount: %d\r\n", sharedCount);
 								int16_t *usound_data = (int16_t *) (v->value.data + 2);
 								current_encounter->usound.n = v->value.data[1];
 								current_encounter->usound.left = usound_data[0];
@@ -1066,7 +1074,7 @@ void spp_client_main(void) {
 						gecko_cmd_le_connection_get_rssi(_conn_handle);
 						k_speaker = k_speaker_offsets[sharedCount>>1] + K_OFFSET;
 						populateBuffers(k_speaker);
-						printLog("Update index: %d k_speaker: %ld\r\n", sharedCount>>1, k_speaker);
+						// printLog("Update index: %d k_speaker: %ld\r\n", sharedCount>>1, k_speaker);
 					}
 				// } else if (_client_type == CLIENT_IS_COMPUTER) {
 				} else  {

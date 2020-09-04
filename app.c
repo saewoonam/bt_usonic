@@ -41,17 +41,28 @@ void startLDMA_PDM(void);
 void init_speaker(void);
 void adcInit(void);
 
-void initTIMER0(void) {
-	// Enable clock for TIMER0 module
-	CMU_ClockEnable(cmuClock_TIMER0, true);
+void timer0_prescale(int prescale) {
 	// Initialize the timer
 	TIMER_Init_TypeDef timerInit = TIMER_INIT_DEFAULT;
 	timerInit.enable = false;
 	timerInit.clkSel = timerClkSelHFPerClk;
-
+	timerInit.prescale = prescale;
 	timerInit.riseAction = timerInputActionReloadStart;
 
 	TIMER_Init(TIMER0, &timerInit);
+}
+void initTIMER0(void) {
+	// Enable clock for TIMER0 module
+	CMU_ClockEnable(cmuClock_TIMER0, true);
+//	// Initialize the timer
+//	TIMER_Init_TypeDef timerInit = TIMER_INIT_DEFAULT;
+//	timerInit.enable = false;
+//	timerInit.clkSel = timerClkSelHFPerClk;
+//
+//	timerInit.riseAction = timerInputActionReloadStart;
+//
+//	TIMER_Init(TIMER0, &timerInit);
+	timer0_prescale(0);
 	// Configure the TIMER0 module for Capture mode and to trigger on every other edge
 	TIMER_InitCC_TypeDef timerCCInit = TIMER_INITCC_DEFAULT;
 	timerCCInit.eventCtrl = timerEventEvery2ndEdge;
@@ -86,8 +97,8 @@ void TIMER0_IRQHandler(void) {
 	}
 	if (true) {
 		timer0_RTCC = RTCC_CounterGet();
-		printLog("%lu, %lu, %lu   timer0 recording %d pdm: %d\r\n", timer0_RTCC,
-				timer0_RTCC - prev_rtcc, timer0_RTCC-prev, recording, pdm_on);
+//		printLog("%lu, %lu, %lu   timer0 recording %d pdm: %d\r\n", timer0_RTCC,
+//				timer0_RTCC - prev_rtcc, timer0_RTCC-prev, recording, pdm_on);
 		prev_rtcc = timer0_RTCC;
 		prev = prev_rtcc;
 	}
@@ -133,7 +144,7 @@ void TIMER1_IRQHandler(void) {
 	static uint32_t prev = 0;
 		timer1_RTCC = RTCC_CounterGet();
 
-		printLog("%lu, %4lu,  %4lu:TX\r\n", timer1_RTCC, timer1_RTCC - prev_rtcc, timer1_RTCC-prev);
+		// printLog("%lu, %4lu,  %4lu:TX\r\n", timer1_RTCC, timer1_RTCC - prev_rtcc, timer1_RTCC-prev);
 		prev_rtcc = timer1_RTCC;
 		prev = prev_rtcc;
 }

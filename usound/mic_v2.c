@@ -296,8 +296,8 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 #endif
 			// Update the k_goertzel
 			if (update_k_goertzel) {
-				printLog("Update k_gooertzel, sc: %d k_goertzel %ld\r\n",
-						sharedCount, k_goertzel);
+//				printLog("Update k_goertzel, sc: %d k_goertzel %ld\r\n",
+//						sharedCount, k_goertzel);
 				// reset update
 				k_goertzel = k_goertzel_offsets[sharedCount >> 1] + K_OFFSET;
 				// k_goertzel =  k_goertzel_offsets[2] + K_OFFSET;

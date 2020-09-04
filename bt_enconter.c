@@ -22,7 +22,7 @@ extern uint8 serviceUUID[16];
 extern uint8_t k_speaker_offsets[12];
 extern uint8_t k_goertzel_offsets[12];
 
-void update_public_key(void);
+// void update_public_key(void);
 int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 // extern int32_t k_goertzel;
 // extern int32_t k_speaker;
@@ -38,8 +38,9 @@ int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 #define LOG_UNMARK (1<<3)
 #define LOG_RESET (1<<4)
 
-#define UPDATE_KEY_WITH_ADV
+#define _KEY_WITH_ADV
 // #define RANDOM_MAC
+// #define CHECK_PAST
 
 struct {
 	uint8_t flagsLen; /* Length of the Flags field. */
@@ -144,7 +145,7 @@ void print_offsets(uint8_t *offsets) {
 }
 #define PRIVATE
 
-void start_adv(void) {
+void start_bt(void) {
 	printLog("local mac addr: ");
 	print_mac(local_mac);
 	calc_k_offsets(local_mac, k_speaker_offsets);
@@ -163,6 +164,7 @@ void start_adv(void) {
 	//	 * units of (milliseconds * 1.6).  */
 	//	gecko_cmd_le_gap_set_advertise_timing(HANDLE_ADV, 320, 320, 0, 0);
 
+	// Slave_server mode
 	/* Start advertising in user mode */
 	// advertise with name and custom service
 #ifndef PRIVATE
@@ -178,13 +180,17 @@ void start_adv(void) {
 	->result;
 #endif
 	printLog("Start adv result: %x\r\n", res);
+
+	// Start discovery using the default 1M PHY
+	// Master_client mode
+	gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic);
 }
 
 void set_new_mac_address(void) {
 	gecko_cmd_le_gap_stop_advertising(HANDLE_ADV);
 	gecko_cmd_le_gap_end_procedure();
 
-#ifdef PRIVATE
+#ifndef PRIVATE
 	bd_addr rnd_addr;
 	struct gecko_msg_le_gap_set_advertise_random_address_rsp_t *response;
 	// struct gecko_msg_le_gap_stop_advertising_rsp_t *stop_response;
@@ -209,18 +215,15 @@ void set_new_mac_address(void) {
 #else
 	get_local_mac();
 #endif
-	// Slave_server mode
-	start_adv();
-	// Start discovery using the default 1M PHY
-	// Master_client mode
-	gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic);
+	start_bt();
+
 
 }
 
 void  set_adv_params(uint16_t *params) {
     gecko_cmd_le_gap_stop_advertising(HANDLE_ADV);
 	gecko_cmd_le_gap_set_advertise_timing(HANDLE_ADV, params[0], params[1], 0, 0);
-	start_adv();
+	start_bt();
 }
 
 void startObserving(uint16_t interval, uint16_t window) {
@@ -267,23 +270,9 @@ uint8_t findServiceInAdvertisement(uint8_t *data, uint8_t len) {
 }
 
 static bool compare_mac(uint8_t* addr) {
-//	bd_addr local_addr;
-//	local_addr = gecko_cmd_system_get_bt_address()->address;
-//	uint32_t* l = (uint32_t *)(local_addr.addr);
-//	get_local_mac();
 	uint32_t* l = (uint32_t *) local_mac;
 	uint32_t* r = (uint32_t *) addr;
 
-//	for (int i = 0; i < 6; i++) {
-//		printLog("%2x ", addr[i]);
-//	}
-//	printLog("local address: ");
-//				for (i = 0; i < 5; i++) {
-//					printLog("%2.2x:", local_addr.addr[5 - i]);
-//				}
-//	printLog("%2.2x\r\n", local_addr.addr[0]);
-//    printLog("\r\n");
-	// printLog("%lu, %lu\r\n", *l, *r);
 //	if (*l > *r) {
 	if (*l < *r) {
 		return 1;
@@ -336,6 +325,7 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 			if ((pResp->data.data[i + 2] == 0x6F)
 					&& (pResp->data.data[i + 3] == 0xFD)) {
 				ad_match_found = compare_mac(pResp->address.addr);
+				// printLog("found exposure uuid\r\n");
 			}
 		}
 		// Jump to next AD record
@@ -345,6 +335,7 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 	// Check if already found during this epoch_minute
 	if (ad_match_found) {
 		// check if already got data
+		// printLog("Found match, check if seen in previous time period\r\n");
 		uint32_t timestamp = ts_ms();
 		if (timestamp > _time_info.next_minute) {
 			// Need to update key and mac address...
@@ -356,6 +347,9 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 		if ((status & (1 << 3)) == 0) {  // Check if in encounter mode
 			// in encounter mode, check if data collected already
 			int idx = in_encounters_fifo(pResp->address.addr, epoch_minute);
+#ifndef CHECK_PAST
+			idx = -1;
+#endif
 			if (idx >= 0) {
 				// printLog("Connected during this minute already\r\n");
 				ad_match_found = 0;
@@ -427,6 +421,9 @@ void setup_encounter_record(uint8_t* mac_addr) {
 #endif
 	// Check if record already exists by mac
 	int idx = in_encounters_fifo(mac_addr, epoch_minute);
+#ifndef CHECK_PAST
+			idx = -1;
+#endif
 #ifdef SCAN_DEBUG
 	printLog("\tp_idx: %ld, c_idx: %ld\n", p_fifo_last_idx, c_fifo_last_idx);
 #endif
@@ -450,7 +447,7 @@ void setup_encounter_record(uint8_t* mac_addr) {
 }
 
 #include "encounter/encounter.h"
-void print_encounter(int index);
+// void print_encounter(int index);
 
 void fake_encounter(uint8_t num) {
 	Encounter_record_v2 *current_encounter;

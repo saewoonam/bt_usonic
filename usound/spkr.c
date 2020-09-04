@@ -42,15 +42,15 @@ unsigned int ldma_channelTMR_TOPV, ldma_channelTMR_COMP;
 void populateBuffers(int k_value) {
 	// float pulse_width = 5e-3;
 	int pw = pulse_width*1000;
-	printLog("pulse_width %d ms\r\n", pw);
+	// printLog("pulse_width %d ms\r\n", pw);
 	static int k=0;  // use this to remember k from call to call... if k_value<0, use previous k
 	if (k_value > 0) {
 		k = k_value;
 	}
-	printLog("k: %d\r\n", k);
+	// printLog("k: %d\r\n", k);
 	calculate_period_k(k, pulse_width, BUFFER_SIZE, &top,
 			&numWaves);
-	printLog("numWaves %d top %d\r\n", numWaves, top);
+	// printLog("numWaves %d top %d\r\n", numWaves, top);
 //	calculate_periods_list(freq_start, freq_stop, pulse_width, list_top,
 //			&numWaves);
 //	printLog("numWaves %d top %d\r\n", numWaves, list_top[0]);
@@ -80,9 +80,9 @@ void startDMADRV_TMR(void);
 
 bool dma_tmr_comp_cb(unsigned int channel, unsigned int sequenceNo,
 		void *userParam) {
-	uint32_t curr = RTCC_CounterGet();
-	printLog("%lu, %6lu, %6lu:  spkr tmr_comp_cb: channel %d\r\n", curr,
-			curr - prev_rtcc, 0L, channel);
+//	uint32_t curr = RTCC_CounterGet();
+//	printLog("%lu, %6lu, %6lu:  spkr tmr_comp_cb: channel %d\r\n", curr,
+//			curr - prev_rtcc, 0L, channel);
 	// printLog("tmr_comp_cb: channel %d, sequenceNo %d\r\n", channel, sequenceNo);
 	TIMER_Enable(TIMER1, false);
 	speaker_on=false;
