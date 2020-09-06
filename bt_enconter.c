@@ -96,6 +96,7 @@ int32_t calc_k_from_mac(uint8_t *mac) {
 }
 
 int32_t calc_k_offset(uint8_t index) {
+	index %= 14;
 	if (index < 18) {
 		return (index << 3);
 	} else {
@@ -327,7 +328,23 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 				ad_match_found = compare_mac(pResp->address.addr);
 				// printLog("found exposure uuid\r\n");
 			}
+			if ((pResp->data.data[i + 2] == 0x19)
+					&& (pResp->data.data[i + 3] == 0xC0)) {
+				printLog("found C019 uuid\r\n");
+				ad_match_found = 1;
+			}
 		}
+		if (ad_type == 0x06 || ad_type == 0x07) {
+			// Type 0x06 = Incomplete List of 128-bit Service Class UUIDs
+			// Type 0x07 = Complete List of 128-bit Service Class UUIDs
+			if (memcmp(serviceUUID, &(pResp->data.data[i + 2]), 16) == 0) {
+				// printLog("Found SPP device\r\n");
+				// ad_match_found = 1;
+				ad_match_found = compare_mac(pResp->address.addr);
+			}
+		}
+
+
 		// Jump to next AD record
 		i = i + ad_len + 1;
 	}
@@ -404,7 +421,7 @@ extern uint32_t c_fifo_last_idx;
 extern uint32_t p_fifo_last_idx;
 // extern uint32_t p_fifo_last_idx;
 
-#define SCAN_DEBUG
+//#define SCAN_DEBUG
 void setup_encounter_record(uint8_t* mac_addr) {
 	Encounter_record_v2 *current_encounter;
 	uint32_t timestamp = ts_ms();

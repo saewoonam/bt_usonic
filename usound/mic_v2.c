@@ -89,7 +89,7 @@ void pdm_start(void) {
 	while (PDM->SYNCBUSY)
 		;
 	// Changed: From 3 to 8
-	PDM->CTRL = (5 << _PDM_CTRL_GAIN_SHIFT) | (32 << _PDM_CTRL_DSR_SHIFT);
+	PDM->CTRL = (6 << _PDM_CTRL_GAIN_SHIFT) | (32 << _PDM_CTRL_DSR_SHIFT);
 }
 
 

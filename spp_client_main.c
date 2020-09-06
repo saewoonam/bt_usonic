@@ -52,9 +52,12 @@
 #define STATE_CONNECTED 8
 #define STATE_SPP_MODE 	9
 #define ADV_ONLY		10
+#define FIND_UPLOAD		11
+#define UPLOAD_DATA 	12
 #define ROLE_UNKNOWN 		-1
 #define ROLE_CLIENT_MASTER 	0
 #define ROLE_SERVER_SLAVE 	1
+#define ROLE_CLIENT_MASTER_UPLOAD 	2
 
 #define CLIENT_IS_BTDEV		0
 #define CLIENT_IS_COMPUTER	1
@@ -81,6 +84,8 @@ const char *ota_version = "2.0";
 const uint8 serviceUUID[16] = { 0x05, 0x81, 0x7E, 0xA0, 0xEE, 0x7A, 0x27, 0xA9,
 		0x3E, 0x44, 0x68, 0x91, 0x24, 0x32, 0x18, 0x7B };
 
+const uint8 service_upload_UUID[2] = { 0x19, 0xC0 };
+
 // SPP data UUID: fec26ec4-6d71-4442-9f81-55bc21d658d6
 const uint8 charUUID[16] = { 0xd6, 0x58, 0xd6, 0x21, 0xbc, 0x55, 0x81, 0x9f,
 		0x42, 0x44, 0x71, 0x6d, 0xc4, 0x6e, 0xc2, 0xfe };
@@ -89,6 +94,8 @@ const uint8 charUUID[16] = { 0xd6, 0x58, 0xd6, 0x21, 0xbc, 0x55, 0x81, 0x9f,
 const uint8 charUUID_rw[16] = { 0x68, 0x60, 0x95, 0x48, 0xd6, 0x07, 0x87, 0xa7,
 		0xcd, 0x4d, 0x47, 0x5f, 0x57, 0x77, 0xcd, 0x56 };
 
+
+const uint8 char_upload_UUID[2] = {0x0E, 0xEC};
 
 /* soft timer handles */
 #define RESTART_TIMER    1
@@ -196,6 +203,7 @@ extern uint8_t public_key[32];
 static int _main_state;
 static uint32 _service_handle;
 static uint16 _char_handle;
+static uint16 _char_upload_handle;
 static uint16 _char_rw_handle;
 
 static int8 _role = ROLE_UNKNOWN;
@@ -203,7 +211,7 @@ uint8_t local_mac[6];
 /* Default maximum packet size is 20 bytes. This is adjusted after connection is opened based
  * on the connection parameters */
 
-volatile int conn_interval = 400; //64
+volatile int conn_interval = 64; //64
 Encounter_record_v2 *current_encounter = encounters;
 static int8  _rssi_count = 0;
 
@@ -216,6 +224,7 @@ static void reset_variables() {
 	_main_state = DISCONNECTED;
 	_service_handle = 0;
 	_char_handle = 0;
+	_char_upload_handle = 0;
 	_char_rw_handle = 0;
 	_role = ROLE_UNKNOWN;
 	_client_type = -1;
@@ -301,6 +310,27 @@ static void send_spp_data_client() {
 	if (result != 0) {
 		printLog("Unexpected error sending shared count: %x\r\n", result);
 	}
+
+}
+
+static void send_upload_data() {
+	uint16 result;
+	int len = 4;
+	static uint32_t counter = 0;
+    	printLog("Trying to upload\r\n");
+    	// gecko_cmd_gatt_read_characteristic_value(_conn_handle, _char_upload_handle);
+		do {
+			result = gecko_cmd_gatt_write_characteristic_value(
+					_conn_handle, _char_upload_handle, len, &counter)->result;
+		} while (result == bg_err_out_of_memory);
+		counter++;
+		if (result != 0) {
+			printLog("Unexpected error sending upload count: 0x%x\r\n", result);
+		}
+
+		printLog("Finished one upload\r\n");
+
+	gecko_cmd_le_connection_close(_conn_handle);
 
 }
 
@@ -659,6 +689,12 @@ void print_encounter(int index) {
 		}
 		printLog("\r\n");
 	}
+	uint16_t *sound = (uint16_t *) e;
+	printLog("%5d", temp[11]);
+	for (int i=6; i<10; i++) {
+		printLog("%5d", sound[i]);
+	}
+	printLog("\r\n");
 	flushLog();
 }
 
@@ -808,8 +844,11 @@ void spp_client_main(void) {
 				gecko_cmd_le_connection_set_timing_parameters(_conn_handle, conn_interval,
 						conn_interval, 0, 200, 0, 0xFFFF);
 
-				gecko_cmd_gatt_discover_primary_services_by_uuid(_conn_handle,
-						16, serviceUUID);
+				gecko_cmd_gatt_discover_primary_services(_conn_handle);
+//				gecko_cmd_gatt_discover_primary_services_by_uuid(_conn_handle,
+//						16, serviceUUID);
+//				gecko_cmd_gatt_discover_primary_services_by_uuid(_conn_handle,
+//						2, service_upload_UUID);
 				_main_state = FIND_SERVICE;
 				_role = ROLE_CLIENT_MASTER;
 
@@ -823,15 +862,15 @@ void spp_client_main(void) {
 				_role = ROLE_SERVER_SLAVE;
 			}
 	        current_encounter = encounters + (c_fifo_last_idx & IDX_MASK);
-	        printLog("open connection type: %d mac: ", evt->data.evt_le_connection_opened.address_type);
-	        print_mac(evt->data.evt_le_connection_opened.address.addr);
+	        // printLog("open connection type: %d mac: ", evt->data.evt_le_connection_opened.address_type);
+	        // print_mac(evt->data.evt_le_connection_opened.address.addr);
 	        setup_encounter_record(evt->data.evt_le_connection_opened.address.addr);
 			break;
 
 		case gecko_evt_le_connection_closed_id:
 			printLog("DISCONNECTED!\r\n");
-			// printLog("_role, _client_type: %d, %d\r\n", _role, _client_type);
-            if ( (_role==0) || ((_role==1) && (_client_type==0))) {
+			printLog("_role, _client_type: %d, %d\r\n", _role, _client_type);
+            if ( (_role==ROLE_CLIENT_MASTER) || ((_role==1) && (_client_type==0))) {
     			// compute shared secret
                 X25519_calc_shared_secret(shared_key, private_key, current_encounter->public_key);
                 memcpy(current_encounter->public_key, shared_key, 32);
@@ -855,9 +894,9 @@ void spp_client_main(void) {
 			break;
 
 		case gecko_evt_le_connection_parameters_id:
-			printLog("Conn.parameters: interval %u units, txsize %u\r\n",
-					evt->data.evt_le_connection_parameters.interval,
-					evt->data.evt_le_connection_parameters.txsize);
+//			printLog("Conn.parameters: interval %u units, txsize %u\r\n",
+//					evt->data.evt_le_connection_parameters.interval,
+//					evt->data.evt_le_connection_parameters.txsize);
 			break;
 
 		case gecko_evt_gatt_mtu_exchanged_id:
@@ -865,16 +904,29 @@ void spp_client_main(void) {
 			 * up to ATT_MTU-3 bytes can be sent at once  */
 			_max_packet_size = evt->data.evt_gatt_mtu_exchanged.mtu - 3;
 			_min_packet_size = _max_packet_size; // Try to send maximum length packets whenever possible
-			// printLog("MTU exchanged: %d\r\n",
-			//		evt->data.evt_gatt_mtu_exchanged.mtu);
+			 printLog("MTU exchanged: %d\r\n",
+					evt->data.evt_gatt_mtu_exchanged.mtu);
 			break;
 
 		case gecko_evt_gatt_service_id:  // after connection handle looking for service
+//			printLog("length of gatt_service: %d\r\n", evt->data.evt_gatt_service.uuid.len);
+//			for(int i=0; i<evt->data.evt_gatt_service.uuid.len; i++) {
+//				printLog("%02X ", evt->data.evt_gatt_service.uuid.data[i]);
+//			}
+//			printLog("\r\n");
 			if (evt->data.evt_gatt_service.uuid.len == 16) {
 				if (memcmp(serviceUUID, evt->data.evt_gatt_service.uuid.data,
 						16) == 0) {
 					// printLog("Service discovered\r\n");
 					_service_handle = evt->data.evt_gatt_service.service;
+				}
+			}
+			if (evt->data.evt_gatt_service.uuid.len == 2) {
+				if (memcmp(service_upload_UUID, evt->data.evt_gatt_service.uuid.data,
+						2) == 0) {
+					printLog("upload service found, _main_state: %d\r\n", _main_state);
+					_service_handle = evt->data.evt_gatt_service.service;
+					_role = ROLE_CLIENT_MASTER_UPLOAD;
 				}
 			}
 			break;
@@ -883,13 +935,29 @@ void spp_client_main(void) {
 			switch (_main_state) {
 			case FIND_SERVICE:
 				if (_service_handle > 0) {
+					if (_role == ROLE_CLIENT_MASTER) {
 					// Service found, next search for characteristics
 					gecko_cmd_gatt_discover_characteristics(_conn_handle,
 							_service_handle);
 					_main_state = SEND_0;
+					} else {
+						gecko_cmd_gatt_discover_characteristics(_conn_handle,
+								_service_handle);
+						_main_state = FIND_UPLOAD;
+					}
 				} else {
 					// No service found -> disconnect
 					printLog("SPP service not found?\r\n");
+					gecko_cmd_le_connection_close(_conn_handle);
+				}
+				break;
+			case FIND_UPLOAD:
+				if (_char_upload_handle > 0) {
+					printLog("Try to send upload data\r\n");
+					send_upload_data();
+				} else {
+					// No characteristic found? -> disconnect
+					printLog("UPLOAD char not found?\r\n");
 					gecko_cmd_le_connection_close(_conn_handle);
 				}
 				break;
@@ -934,6 +1002,16 @@ void spp_client_main(void) {
 			break;
 
 		case gecko_evt_gatt_characteristic_id:  // after service found handle looking for characteristic
+			if(false) {
+				printLog("length of gatt_characteristic: %d\r\n",
+						evt->data.evt_gatt_characteristic.uuid.len);
+				for (int i = 0; i < evt->data.evt_gatt_characteristic.uuid.len;
+						i++) {
+					printLog("%02X ",
+							evt->data.evt_gatt_characteristic.uuid.data[i]);
+				}
+				printLog("\r\n");
+			}
 			if (evt->data.evt_gatt_characteristic.uuid.len == 16) {
 				if (memcmp(charUUID,
 						evt->data.evt_gatt_characteristic.uuid.data, 16) == 0) {
@@ -945,6 +1023,14 @@ void spp_client_main(void) {
 						evt->data.evt_gatt_characteristic.uuid.data, 16) == 0) {
 					// printLog("Char RW discovered\r\n");
 					_char_rw_handle =
+							evt->data.evt_gatt_characteristic.characteristic;
+				}
+			}
+			if (evt->data.evt_gatt_characteristic.uuid.len == 2) {
+				if (memcmp(char_upload_UUID,
+						evt->data.evt_gatt_characteristic.uuid.data, 2) == 0) {
+					printLog("upload char discovered\r\n");
+					_char_upload_handle =
 							evt->data.evt_gatt_characteristic.characteristic;
 				}
 			}
@@ -975,6 +1061,18 @@ void spp_client_main(void) {
 					}
 					// send_spp_data_client();
 				}
+			}
+			if (evt->data.evt_gatt_characteristic_value.characteristic
+					== _char_upload_handle) {
+				printLog("length of gatt_characteristic_value: %d\r\n",
+						evt->data.evt_gatt_characteristic_value.value.len);
+				for (int i = 0; i < evt->data.evt_gatt_characteristic_value.value.len;
+						i++) {
+					printLog("%02X ",
+							evt->data.evt_gatt_characteristic_value.value.data[i]);
+				}
+				printLog("\r\n");
+
 			}
 			break;
 

@@ -95,10 +95,10 @@ void TIMER0_IRQHandler(void) {
 // #endif
 		}
 	}
-	if (true) {
+	if (false) {
 		timer0_RTCC = RTCC_CounterGet();
-//		printLog("%lu, %lu, %lu   timer0 recording %d pdm: %d\r\n", timer0_RTCC,
-//				timer0_RTCC - prev_rtcc, timer0_RTCC-prev, recording, pdm_on);
+		printLog("%lu, %lu, %lu   timer0 recording %d pdm: %d\r\n", timer0_RTCC,
+				timer0_RTCC - prev_rtcc, timer0_RTCC-prev, recording, pdm_on);
 		prev_rtcc = timer0_RTCC;
 		prev = prev_rtcc;
 	}
