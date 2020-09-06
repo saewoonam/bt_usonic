@@ -124,7 +124,7 @@ void store_event(uint8_t *event) {
 			printLog("Error storing to flash %ld\r\n", retCode);
 		}
 		encounter_count++;
-		printLog("Encounter_count: %ld\r\n", encounter_count);
+		printLog("Storing Encounter_count: %ld\r\n", encounter_count);
 		update_counts_status();
 		// gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4, (const uint8*) &encounter_count);
 	} else {
@@ -149,6 +149,26 @@ void store_time() {
 	_time_info.offset_time = offset_time;
 */
     store_event(time_evt);
+}
+
+extern struct my_encounter_index _encounters_tracker;
+
+void read_encounters_tracking(void) {
+	uint16 key = 0x4001;
+	struct gecko_msg_flash_ps_load_rsp_t *result;
+
+	result = gecko_cmd_flash_ps_load(key);
+	if (result->result==0) {
+		memcpy(&_encounters_tracker, result->value.data, result->value.len);
+	} else {
+		printLog("Problem reading encounters_tracker fromo persistent storage\r\n");
+	}
+}
+
+void write_encounters_tracking(void) {
+	uint16_t key = 0x4001;
+	int result = gecko_cmd_flash_ps_save(key, 8, (uint8_t *)&_encounters_tracker)->result;
+    printLog("write_encounters_tracking result 0x%04X\r\n", result);
 }
 
 void read_name_ps(void) {

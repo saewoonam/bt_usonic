@@ -10,6 +10,7 @@
 #include "gatt_db.h"
 #include "app.h"
 
+#include "encounter/encounter.h"
 #include "crypto_and_time/timing.h"
 #include "ota.h"
 /****************** globals */
@@ -281,6 +282,9 @@ static bool compare_mac(uint8_t* addr) {
 	return 0;
 }
 
+extern uint32_t encounter_count;
+
+
 int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 		uint8_t status) {
 
@@ -295,7 +299,7 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 
 		ad_len = pResp->data.data[i];
 		ad_type = pResp->data.data[i + 1];
-		// printLog("ad_len, ad_type  %d, %d\r\n", ad_len, ad_type);
+		// printLog("ad_type: %4d, ad_len: %4d\r\n", ad_type, ad_len);
 #ifdef NAME_MATCH
 		char name[32];
 		char dev_name[]="Empty Ex";
@@ -326,12 +330,15 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 			if ((pResp->data.data[i + 2] == 0x6F)
 					&& (pResp->data.data[i + 3] == 0xFD)) {
 				ad_match_found = compare_mac(pResp->address.addr);
-				// printLog("found exposure uuid\r\n");
+				printLog("found exposure uuid\r\n");
 			}
 			if ((pResp->data.data[i + 2] == 0x19)
 					&& (pResp->data.data[i + 3] == 0xC0)) {
-				printLog("found C019 uuid\r\n");
-				ad_match_found = 1;
+//				printLog("found C019 uuid, count: %d, start: %d\r\n",
+//						encounter_count, _encounters_tracker.start_upload);
+				if (_encounters_tracker.start_upload < encounter_count) {
+					ad_match_found = 1;
+				}
 			}
 		}
 		if (ad_type == 0x06 || ad_type == 0x07) {

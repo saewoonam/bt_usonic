@@ -48,4 +48,11 @@ typedef struct Encounter_records_v2 {
 
 void print_encounter(int index);
 
+struct my_encounter_index
+{
+	uint32_t oldest_encounter;  // index of the oldest encounter
+	uint32_t start_upload;		// index to start uploading from
+};
+extern struct my_encounter_index _encounters_tracker;
+
 #endif // ENCOUNTER_H

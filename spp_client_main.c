@@ -54,6 +54,7 @@
 #define ADV_ONLY		10
 #define FIND_UPLOAD		11
 #define UPLOAD_DATA 	12
+#define FINISHED_UPLOAD 	13
 #define ROLE_UNKNOWN 		-1
 #define ROLE_CLIENT_MASTER 	0
 #define ROLE_SERVER_SLAVE 	1
@@ -137,6 +138,7 @@ void determine_counts(uint32_t flash_size);
 void flash_erase();
 void read_name_ps(void);
 void set_name(uint8_t *name);
+void read_encounters_tracking(void);
 
 void readBatteryLevel(void);
 
@@ -171,7 +173,7 @@ void setup_k() {
 /***************************************************************************************************
  Global Variables
  **************************************************************************************************/
-
+struct my_encounter_index _encounters_tracker;
 // encounter related
 uint32_t encounter_count = 0;
 Encounter_record_v2 encounters[IDX_MASK+1];
@@ -315,24 +317,62 @@ static void send_spp_data_client() {
 
 static void send_upload_data() {
 	uint16 result;
-	int len = 4;
-	static uint32_t counter = 0;
-    	printLog("Trying to upload\r\n");
-    	// gecko_cmd_gatt_read_characteristic_value(_conn_handle, _char_upload_handle);
+	// int len = 192;
+	// static uint32_t index = 0;
+	uint8_t temp[196];
+	bool done = false;
+//	for (int i=0; i<192; i++) {
+//		temp[i] = i;
+//	}
+	uint8_t chunk_size = 192;
+	if ((encounter_count - _encounters_tracker.start_upload) > 6) {
+		chunk_size = 192;
+	} else {
+		chunk_size = (encounter_count - _encounters_tracker.start_upload) << 5;
+		done = true;
+	}
+
+	temp[0] = _encounters_tracker.start_upload;
+	if (chunk_size>0) {
+		// printLog("Send start: %lu\r\n", _encounters_tracker.start_upload);
+		// figure out actual size of the data to send... usually 192 except at the end
+		uint8 xfer_len = chunk_size;
+		// Figure out starting point in memory
+		uint32_t addr = (_encounters_tracker.start_upload) << 5;
+		// get data from storage
+		//int32_t retCode =
+		storage_readRaw(addr, temp + 4, xfer_len);
+		xfer_len += 4;  // Add length of packet number
+		//send over bluetooth
 		do {
-			result = gecko_cmd_gatt_write_characteristic_value(
-					_conn_handle, _char_upload_handle, len, &counter)->result;
+			result = gecko_cmd_gatt_write_characteristic_value(_conn_handle,
+					_char_upload_handle, xfer_len, temp)->result;
 		} while (result == bg_err_out_of_memory);
-		counter++;
-		if (result != 0) {
-			printLog("Unexpected error sending upload count: 0x%x\r\n", result);
-		}
-
-		printLog("Finished one upload\r\n");
-
-	gecko_cmd_le_connection_close(_conn_handle);
+		_encounters_tracker.start_upload += (chunk_size) >> 5;
+	}
+	if (done) {
+		_main_state = FINISHED_UPLOAD;
+		printLog("Upload finished start_upload: %lu\r\n", _encounters_tracker.start_upload);
+	}
 
 }
+
+// scratch work
+//
+//    	printLog("Trying to upload counter: %lu\r\n", counter);
+//    	// gecko_cmd_gatt_read_characteristic_value(_conn_handle, _char_upload_handle);
+//		do {
+//
+//			// without response does nothing with computer...
+//			result = gecko_cmd_gatt_write_characteristic_value(
+//					_conn_handle, _char_upload_handle, len, temp)->result;
+//		} while (result == bg_err_out_of_memory);
+//		counter++;
+//		if (result != 0) {
+//			printLog("Unexpected error sending upload count: 0x%x\r\n", result);
+//		}
+
+
 
 static void send_spp_data() {
 	uint8 len = 1;
@@ -780,6 +820,8 @@ void spp_client_main(void) {
 			  uint32_t flash_size = storage_size();
 			  printLog("storage_init: %ld %ld\r\n", flash_ret, flash_size);
 			  determine_counts(flash_size);
+			  read_encounters_tracking();
+			  _encounters_tracker.start_upload = 0;
 			  read_name_ps();
 
 			// ***************
@@ -953,7 +995,7 @@ void spp_client_main(void) {
 				break;
 			case FIND_UPLOAD:
 				if (_char_upload_handle > 0) {
-					printLog("Try to send upload data\r\n");
+					// printLog("Try to send upload data\r\n");
 					send_upload_data();
 				} else {
 					// No characteristic found? -> disconnect
@@ -961,6 +1003,10 @@ void spp_client_main(void) {
 					gecko_cmd_le_connection_close(_conn_handle);
 				}
 				break;
+			case FINISHED_UPLOAD:
+				gecko_cmd_le_connection_close(_conn_handle);
+				break;
+
 			case FIND_SPP:
 				if (_char_handle > 0) {
 					// Char found, turn on indications
@@ -1079,7 +1125,12 @@ void spp_client_main(void) {
 			/* Software Timer event */
 		case gecko_evt_hardware_soft_timer_id: {
 			uint32_t ts = ts_ms();
-			if (ts > _time_info.next_minute) update_next_minute();
+			if (ts > _time_info.next_minute) {
+				if (_role != ROLE_CLIENT_MASTER_UPLOAD) {
+				printLog("Soft timer update next minute\r\n");
+				update_next_minute();
+				}
+			}
 			readBatteryLevel();
 
 			switch (evt->data.evt_hardware_soft_timer.handle) {
