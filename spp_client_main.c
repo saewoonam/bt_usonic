@@ -55,6 +55,7 @@
 #define FIND_UPLOAD		11
 #define UPLOAD_DATA 	12
 #define FINISHED_UPLOAD 	13
+#define TIME_SYNC	 	14
 #define ROLE_UNKNOWN 		-1
 #define ROLE_CLIENT_MASTER 	0
 #define ROLE_SERVER_SLAVE 	1
@@ -97,6 +98,7 @@ const uint8 charUUID_rw[16] = { 0x68, 0x60, 0x95, 0x48, 0xd6, 0x07, 0x87, 0xa7,
 
 
 const uint8 char_upload_UUID[2] = {0x0E, 0xEC};
+const uint8 char_time_UUID[2] = {0x0F, 0xEC};
 
 /* soft timer handles */
 #define RESTART_TIMER    1
@@ -206,6 +208,7 @@ static int _main_state;
 static uint32 _service_handle;
 static uint16 _char_handle;
 static uint16 _char_upload_handle;
+static uint16 _char_time_handle;
 static uint16 _char_rw_handle;
 
 static int8 _role = ROLE_UNKNOWN;
@@ -227,6 +230,7 @@ static void reset_variables() {
 	_service_handle = 0;
 	_char_handle = 0;
 	_char_upload_handle = 0;
+	_char_time_handle = 0;
 	_char_rw_handle = 0;
 	_role = ROLE_UNKNOWN;
 	_client_type = -1;
@@ -985,13 +989,21 @@ void spp_client_main(void) {
 					} else {
 						gecko_cmd_gatt_discover_characteristics(_conn_handle,
 								_service_handle);
-						_main_state = FIND_UPLOAD;
+						if (_status & (1<<2)) {
+							_main_state = TIME_SYNC;
+						} else {
+							_main_state = FIND_UPLOAD;
+						}
 					}
 				} else {
 					// No service found -> disconnect
 					printLog("SPP service not found?\r\n");
 					gecko_cmd_le_connection_close(_conn_handle);
 				}
+				break;
+			case TIME_SYNC:
+		    	gecko_cmd_gatt_read_characteristic_value(_conn_handle, _char_time_handle);
+				_main_state = FIND_UPLOAD;
 				break;
 			case FIND_UPLOAD:
 				if (_char_upload_handle > 0) {
@@ -1079,6 +1091,12 @@ void spp_client_main(void) {
 					_char_upload_handle =
 							evt->data.evt_gatt_characteristic.characteristic;
 				}
+				if (memcmp(char_time_UUID,
+						evt->data.evt_gatt_characteristic.uuid.data, 2) == 0) {
+					printLog("time char discovered\r\n");
+					_char_time_handle =
+							evt->data.evt_gatt_characteristic.characteristic;
+				}
 			}
 			break;
 
@@ -1109,7 +1127,7 @@ void spp_client_main(void) {
 				}
 			}
 			if (evt->data.evt_gatt_characteristic_value.characteristic
-					== _char_upload_handle) {
+					== _char_time_handle) {
 				printLog("length of gatt_characteristic_value: %d\r\n",
 						evt->data.evt_gatt_characteristic_value.value.len);
 				for (int i = 0; i < evt->data.evt_gatt_characteristic_value.value.len;
@@ -1118,7 +1136,7 @@ void spp_client_main(void) {
 							evt->data.evt_gatt_characteristic_value.value.data[i]);
 				}
 				printLog("\r\n");
-
+				_main_state = FIND_UPLOAD;
 			}
 			break;
 
@@ -1132,7 +1150,10 @@ void spp_client_main(void) {
 				}
 			}
 			readBatteryLevel();
-
+			if (ts > (_time_info.near_hotspot_time + 60000)) {
+				write_flash = true;
+				// Start writing
+			}
 			switch (evt->data.evt_hardware_soft_timer.handle) {
 			case RESTART_TIMER:
 				// Restart discovery using the default 1M PHY

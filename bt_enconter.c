@@ -28,6 +28,8 @@ int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 // extern int32_t k_goertzel;
 // extern int32_t k_speaker;
 
+extern bool write_flash;
+
 /* end globals **************/
 
 #define K_OFFSET	276
@@ -336,6 +338,9 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 					&& (pResp->data.data[i + 3] == 0xC0)) {
 //				printLog("found C019 uuid, count: %d, start: %d\r\n",
 //						encounter_count, _encounters_tracker.start_upload);
+				// bluetooth hotspot nearby so stop writing.
+				write_flash = false;
+				_time_info.near_hotspot_time = ts_ms();
 				if (_encounters_tracker.start_upload < encounter_count) {
 					ad_match_found = 1;
 				}

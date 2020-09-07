@@ -27,6 +27,7 @@ struct my_time_struct
 	uint32_t offset_overflow;
 	uint32_t next_minute;
 	uint32_t epochtimesync;
+	uint32_t near_hotspot_time;
 	bool gottime;
 };
 
