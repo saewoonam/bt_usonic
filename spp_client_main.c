@@ -856,10 +856,10 @@ void spp_client_main(void) {
 
 		case gecko_evt_le_gap_scan_response_id:
 			if (_main_state == SCAN_ADV) {
-			// if (true) {
-				// printLog("_main_state %d\r\n", _main_state);
-				// Process scan responses: this function returns 1 if we found the service we are looking for
-				if (ts_ms() < (_time_info.next_minute -55000)) {
+				// create random offset to reduce possible bt collisions as master
+				int offset = gecko_cmd_system_get_random_data(1)->data.data[0]%16;
+				offset *= 250;
+				if (ts_ms() < (_time_info.next_minute -58000+offset)) {
 					// printLog("%lu, next_minute: %lu: wait before connecting\r\n", ts_ms(), _time_info.next_minute);
 					break;
 				}
@@ -970,12 +970,12 @@ void spp_client_main(void) {
 					printLog("SC: %d ", sharedCount);
 					print_encounter(c_fifo_last_idx & IDX_MASK);
 					c_fifo_last_idx++; // this actually saves the data in the fifo
-            	} else { printLog("sharedCount = 0\r\n"); }
+            	} else { printLog("__________sharedCount = 0\r\n"); }
 			}
             // reset everything
 			reset_variables();
 			SLEEP_SleepBlockEnd(sleepEM2);  // Enable sleeping after disconnect
-			gecko_cmd_hardware_set_soft_timer(32768>>1, RESTART_TIMER, true);
+			gecko_cmd_hardware_set_soft_timer(32768>>2, RESTART_TIMER, true);
 			break;
 
 		case gecko_evt_le_connection_parameters_id:

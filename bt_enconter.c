@@ -169,11 +169,12 @@ void start_bt(void) {
 				le_gap_general_discoverable,
 				le_gap_undirected_connectable)->result;
 #else
-		uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
+		//uint16_t res =
+			gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
 				le_gap_user_data,
 				// le_gap_undirected_connectable)
 				// le_gap_connectable_non_scannable)  // this does not work
-				le_gap_connectable_scannable)->result;
+				le_gap_connectable_scannable); //->result;
 #endif
 		// printLog("Start adv result: %x\r\n", res);
 	}
@@ -423,7 +424,7 @@ int process_scan_response_v2(struct gecko_msg_le_gap_scan_response_evt_t *pResp)
 #include "encounter/encounter.h"
 extern Encounter_record_v2 encounters[IDX_MASK + 1];
 extern uint32_t c_fifo_last_idx;
-extern uint32_t p_fifo_last_idx;
+// extern uint32_t p_fifo_last_idx;
 // extern uint32_t p_fifo_last_idx;
 
 //#define SCAN_DEBUG
