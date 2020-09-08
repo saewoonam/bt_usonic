@@ -268,9 +268,11 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 //					curr, curr-prev_rtcc, left_t, p2_l, right_t, p2_r, left_w, right_w);
 
 				curr = RTCC_CounterGet();
+#ifdef DEGUB_DSP
 				printf("%ld, %ld ----:g[%ld]: %e, %e  pk: %d, %d\r\n ", curr,
 						curr - prev_rtcc, k_goertzel,
 						P_left, P_right, l_t, r_t);
+#endif
 				prev_rtcc = curr;
 				insert(l_t, left_t);
 				insert(r_t, right_t);
@@ -289,8 +291,10 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 //				insert(r_t, right_t);
 //				_data_idx++;
 				curr = RTCC_CounterGet();
-				printLog("%ld, %ld ----pk: %d, %d\r\n", curr, curr - prev_rtcc,
-						0, 0);
+#ifdef DEGUB_DSP
+				printLog("%ld, %ld ----g[%ld]: %e, %e  pk: %d, %d\r\n", curr, curr - prev_rtcc,
+						 k_goertzel, P_left, P_right, 0, 0);
+#endif
 				prev_rtcc = curr;
 			}
 #endif

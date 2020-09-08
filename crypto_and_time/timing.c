@@ -35,7 +35,7 @@ struct my_time_struct _time_info = {
 		.gottime=false};
 
 uint32_t ts_ms() {
-	/*  Need to handle overflow... of t_ms... 36hrs*32... perhaps every battery change
+	/*  Need to handle overflow... of ts_ms... 36hrs*32... perhaps every battery change
 	 *
 	 */
 	static uint32_t old_ts = 0;
@@ -105,4 +105,25 @@ void setup_next_minute(void) {
 
 uint32_t em(uint32_t t) {
 	return ((t-_time_info.offset_time) / 1000 + _time_info.epochtimesync)/60;
+}
+
+void sync_clock(uint32_t ts, uint32_t *timedata) {
+	_time_info.epochtimesync = timedata[0]; // units are sec
+	_time_info.offset_time = timedata[1];  // units are ms
+	_time_info.offset_overflow = timedata[2];  // units are integers
+
+	uint32_t epoch_minute_origin = (_time_info.epochtimesync) / 60;
+	uint32_t extra_seconds = _time_info.epochtimesync % 60;
+	_time_info.next_minute = _time_info.offset_time - extra_seconds * 1000
+			+ 60000;
+	uint32_t dt = (ts - _time_info.offset_time) / 1000;
+	uint32_t epoch_minute = (dt + _time_info.epochtimesync) / 60;
+	printLog("em(ts), em(next_minute) %ld, %ld\r\n", em(ts),
+			em(_time_info.next_minute + 1000));
+
+	printLog("offset_time, timestamp, next minute: %ld, %ld, %ld %ld\r\n",
+			_time_info.offset_time, ts, _time_info.next_minute, extra_seconds);
+
+	printLog("epochtimes, e_min, e_min_origin: %ld %ld %ld\r\n",
+			_time_info.epochtimesync, epoch_minute, epoch_minute_origin);
 }

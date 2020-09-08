@@ -13,6 +13,10 @@
 #include "encounter/encounter.h"
 #include "crypto_and_time/timing.h"
 #include "ota.h"
+
+
+//void update_counts_status(void);
+
 /****************** globals */
 //extern uint8 _max_packet_size;
 //extern uint8 _min_packet_size;
@@ -28,7 +32,7 @@ int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 // extern int32_t k_goertzel;
 // extern int32_t k_speaker;
 
-extern bool write_flash;
+// extern bool write_flash;
 
 /* end globals **************/
 
@@ -43,7 +47,7 @@ extern bool write_flash;
 
 #define _KEY_WITH_ADV
 // #define RANDOM_MAC
-// #define CHECK_PAST
+#define CHECK_PAST
 
 struct {
 	uint8_t flagsLen; /* Length of the Flags field. */
@@ -147,44 +151,32 @@ void print_offsets(uint8_t *offsets) {
 	}
 	printLog("\r\n");
 }
-#define PRIVATE
 
+#define USE_RAND_MAC
+extern uint8_t _status;
 void start_bt(void) {
-	printLog("local mac addr: ");
-	print_mac(local_mac);
+	printLog("%lu: Start BT, _status:%d\r\n", ts_ms(), _status);
+
+	// printLog("local mac addr: ");
+	// print_mac(local_mac);
 	calc_k_offsets(local_mac, k_speaker_offsets);
-	printLog("*************k speaker offsets: ");
-	print_offsets(k_speaker_offsets);
-
-	//	/* Set custom advertising data */
-	//	gecko_cmd_le_gap_bt5_set_adv_data(HANDLE_ADV, 0, len, pData);
-	//
-	//	/* Set 0 dBm Transmit Power */
-	//	gecko_cmd_le_gap_set_advertise_tx_power(HANDLE_ADV, 0);
-	//	gecko_cmd_le_gap_set_advertise_configuration(HANDLE_ADV, 0x04);
-	//
-	//	/* Set advertising parameters. 200ms (320/1.6) advertisement interval. All channels used.
-	//	 * The first two parameters are minimum and maximum advertising interval, both in
-	//	 * units of (milliseconds * 1.6).  */
-	//	gecko_cmd_le_gap_set_advertise_timing(HANDLE_ADV, 320, 320, 0, 0);
-
-	// Slave_server mode
-	/* Start advertising in user mode */
-	// advertise with name and custom service
-#ifndef PRIVATE
-	uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
-			le_gap_general_discoverable,
-			le_gap_undirected_connectable)->result;
+	if ((_status & (1 << 2))==0) {  //  don't advertise until clock set
+		// Slave_server mode
+		/* Start advertising in user mode */
+		// advertise with name and custom service
+#ifdef ADV_NAME
+		uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
+				le_gap_general_discoverable,
+				le_gap_undirected_connectable)->result;
 #else
-	uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV, le_gap_user_data,
-	// le_gap_undirected_connectable)
-	// le_gap_connectable_non_scannable)
-	le_gap_connectable_scannable)
-	// le_gap_non_connectable)
-	->result;
+		uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
+				le_gap_user_data,
+				// le_gap_undirected_connectable)
+				// le_gap_connectable_non_scannable)  // this does not work
+				le_gap_connectable_scannable)->result;
 #endif
-	printLog("Start adv result: %x\r\n", res);
-
+		// printLog("Start adv result: %x\r\n", res);
+	}
 	// Start discovery using the default 1M PHY
 	// Master_client mode
 	gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic);
@@ -194,7 +186,7 @@ void set_new_mac_address(void) {
 	gecko_cmd_le_gap_stop_advertising(HANDLE_ADV);
 	gecko_cmd_le_gap_end_procedure();
 
-#ifndef PRIVATE
+#ifdef USE_RAND_MAC
 	bd_addr rnd_addr;
 	struct gecko_msg_le_gap_set_advertise_random_address_rsp_t *response;
 	// struct gecko_msg_le_gap_stop_advertising_rsp_t *stop_response;
@@ -205,7 +197,7 @@ void set_new_mac_address(void) {
 		//  for valid 0x03 type addresses
 		// rnd_response->data.data[5] &= 0x3F; // Last two bits must 0 for valid random mac address
 		// what about 0x01?
-		rnd_response->data.data[5] |= 0xC0; // Last two bits must 0 for valid random mac address
+		rnd_response->data.data[5] |= 0xC0; // Last two bits must be 1 for valid random mac address
 		memcpy(rnd_addr.addr, rnd_response->data.data, 6);
 		response = gecko_cmd_le_gap_set_advertise_random_address(HANDLE_ADV,
 				0x01, rnd_addr);
@@ -285,10 +277,11 @@ static bool compare_mac(uint8_t* addr) {
 }
 
 extern uint32_t encounter_count;
+//extern uint8_t _status;
 
 
 int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
-		uint8_t status) {
+		uint8_t *status) {
 
 	int i = 0;
 	int ad_match_found = 0;
@@ -332,17 +325,16 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 			if ((pResp->data.data[i + 2] == 0x6F)
 					&& (pResp->data.data[i + 3] == 0xFD)) {
 				ad_match_found = compare_mac(pResp->address.addr);
-				printLog("found exposure uuid\r\n");
+				// printLog("found exposure uuid\r\n");
 			}
 			if ((pResp->data.data[i + 2] == 0x19)
 					&& (pResp->data.data[i + 3] == 0xC0)) {
 //				printLog("found C019 uuid, count: %d, start: %d\r\n",
 //						encounter_count, _encounters_tracker.start_upload);
 				// bluetooth hotspot nearby so stop writing.
-				write_flash = false;
 				_time_info.near_hotspot_time = ts_ms();
 				if (_encounters_tracker.start_upload < encounter_count) {
-					ad_match_found = 1;
+					ad_match_found = 2;
 				}
 			}
 		}
@@ -362,7 +354,7 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 	}
 
 	// Check if already found during this epoch_minute
-	if (ad_match_found) {
+	if (ad_match_found==1) {
 		// check if already got data
 		// printLog("Found match, check if seen in previous time period\r\n");
 		uint32_t timestamp = ts_ms();
@@ -373,7 +365,8 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 		}
 		uint32_t epoch_minute = ((timestamp - _time_info.offset_time) / 1000
 				+ _time_info.epochtimesync) / 60;
-		if ((status & (1 << 3)) == 0) {  // Check if in encounter mode
+		if (*status & (1<<2)) return 0;
+		if ((*status & (1 << 3)) == 0) {  // Check if in encounter mode
 			// in encounter mode, check if data collected already
 			int idx = in_encounters_fifo(pResp->address.addr, epoch_minute);
 #ifndef CHECK_PAST
@@ -385,8 +378,8 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 			} else {
 				// calculate k_goertzels
 				calc_k_offsets(pResp->address.addr, k_goertzel_offsets);
-				printLog("k goertzel offsets: ");
-				print_offsets(k_goertzel_offsets);
+				// printLog("k goertzel offsets: ");
+				// print_offsets(k_goertzel_offsets);
 			}
 		}
 	}
@@ -466,8 +459,9 @@ void setup_encounter_record(uint8_t* mac_addr) {
 		memset((uint8_t *) current_encounter, 0, 64);  // clear all values
 		memcpy(current_encounter->mac, mac_addr, 6);
 
-		printLog("remote MAC address in setup: ");
+		printLog("remote MAC: ");
 		print_mac(mac_addr);
+		print_mac(local_mac);
 
 		current_encounter->minute = epoch_minute;
 		// current_encounter->version = 0xFF;

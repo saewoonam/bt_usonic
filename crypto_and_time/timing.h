@@ -39,5 +39,6 @@ uint32_t k_uptime_get();
 void update_next_minute(void);
 void setup_next_minute(void);
 uint32_t em(uint32_t t);
+void sync_clock(uint32_t ts, uint32_t *timedata);
 
 #endif /* CRYPTO_AND_TIME_TIMING_H_ */

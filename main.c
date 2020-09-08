@@ -57,6 +57,24 @@
  * @{
  **************************************************************************************************/
 
+
+gecko_bluetooth_ll_priorities priorities = { 191, 143,  //scan_min, scan_max
+                                             175, 127,  //adv_min,  adv_max
+                                             135,   0,  //conn_min, conn_max
+                                             55,  15,   //init_min, init_max
+                                             175,       //threshold_coex
+                                             16,        //rail_mapping_offset
+                                             16,        //rail_mapping_range
+                                             0,         //afh_scan_interval
+                                             //4,4        //adv_step, scan_step
+                                           };
+
+// Gecko configuration parameters (see gecko_configuration.h)
+//static const gecko_configuration_t config = {
+//  //...
+//  .bluetooth.linklayer_priorities = &priorities,
+//};
+
 #ifndef MAX_ADVERTISERS
 #define MAX_ADVERTISERS 1
 #endif

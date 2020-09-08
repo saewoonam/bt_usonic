@@ -200,6 +200,7 @@ uint8_t battBatteryLevel = 0;
 
 extern uint8_t public_key[32];
 
+bool listen_usb = true;
 /***************************************************************************************************
  Local Variables
  **************************************************************************************************/
@@ -220,10 +221,11 @@ volatile int conn_interval = 64; //64
 Encounter_record_v2 *current_encounter = encounters;
 static int8  _rssi_count = 0;
 
+static int bad_heartbeats = 0;
 static int8 _client_type = -1;
 static bool sending_ota = false;
-static uint8 _status = 1<<2;  // start with clock not set bit
-
+uint8 _status = 1<<2;  // start with clock not set bit
+static bool _update_minute_after_upload = false;
 static void reset_variables() {
 	_conn_handle = 0xFF;
 	_main_state = DISCONNECTED;
@@ -242,11 +244,12 @@ static void reset_variables() {
 	memset(left_t, 0, 32*2);
 	memset(right_t, 0, 32*2);
 	_rssi_count = 0;
+	sharedCount = 0;
 }
 
 void get_local_mac(void);
 int process_scan_response(
-		struct gecko_msg_le_gap_scan_response_evt_t *pResp, uint8_t status);
+		struct gecko_msg_le_gap_scan_response_evt_t *pResp, uint8_t *status);
 void start_bt(void);
 void setup_adv(void);
 void set_adv_params(uint16_t *params);
@@ -276,7 +279,7 @@ static void send_rw_client(char cmd) {
 	if (result != 0) {
 		printLog("Unexpected error try to send char_rw:%c 0x%x\r\n", cmd, result);
 	}
-	printLog("Sent rw command: %c\r\n", cmd);
+	// printLog("Sent rw command: %c\r\n", cmd);
 }
 
 void unlinkPRS();
@@ -287,12 +290,12 @@ static void send_spp_data_client() {
 	uint8_t temp[81];
 
 	if (sharedCount==0) {
-		printLog("********send PUBLIC KEY from client\r\n");
+		// printLog("********send PUBLIC KEY from client\r\n");
 		memcpy(temp+1, public_key, 32);
 		len = 33;
 	} else if (sharedCount==20) {
 		unlinkPRS();
-		printLog("send spp data client, got %d\r\n", sharedCount);
+		// printLog("send spp data client, got %d\r\n", sharedCount);
 		// printLog("*******send usound _data_idx %d\r\n", _data_idx);
 		record_tof(current_encounter);
 		temp[1] = current_encounter->usound.n;
@@ -335,8 +338,7 @@ static void send_upload_data() {
 		chunk_size = (encounter_count - _encounters_tracker.start_upload) << 5;
 		done = true;
 	}
-
-	temp[0] = _encounters_tracker.start_upload;
+	memcpy(temp, &(_encounters_tracker.start_upload), 4);
 	if (chunk_size>0) {
 		// printLog("Send start: %lu\r\n", _encounters_tracker.start_upload);
 		// figure out actual size of the data to send... usually 192 except at the end
@@ -384,7 +386,7 @@ static void send_spp_data() {
 	uint8_t temp[33];
 	// printLog("send spp data, got %d\r\n", sharedCount);
 	if (sharedCount==1) {
-		printLog("Got the first packet from the client, sending: %d\r\n", sharedCount);
+		// printLog("Got the first packet from the client, sending: %d\r\n", sharedCount);
 		memcpy(temp+1, public_key, 32);
 		len = 33;
 	}
@@ -518,7 +520,7 @@ void parse_bt_command(uint8_t c) {
 	case 's':{
 		write_flash = false;
 		mark_set = false;
-		_status = 0;
+		_status &= ~(1); // clear flash writing bit
 		update_counts_status();
 		printLog("Stop writing to flash\r\n");
         break;
@@ -599,22 +601,8 @@ void parse_bt_command(uint8_t c) {
 		timedata = (uint32_t *) gecko_cmd_gatt_server_read_attribute_value(gattdb_gatt_spp_data,0 )->value.data;
 		uint8_t len = gecko_cmd_gatt_server_read_attribute_value(gattdb_gatt_spp_data,0 )->value.len;
         printLog("In O, got %d bytes, ts: %ld\r\n", len, ts);
-        _time_info.epochtimesync = timedata[0]; // units are sec
-        _time_info.offset_time = timedata[1];  // units are ms
-        _time_info.offset_overflow = timedata[2];  // units are integers
+        sync_clock(ts, timedata);
 
-        uint32_t epoch_minute_origin = (_time_info.epochtimesync)/60;
-        uint32_t extra_seconds = _time_info.epochtimesync%60;
-        _time_info.next_minute = _time_info.offset_time - extra_seconds * 1000 + 60000;
-        uint32_t dt = (ts-_time_info.offset_time)/1000;
-        uint32_t epoch_minute = (dt + _time_info.epochtimesync)/60;
-        printLog("em(ts), em(next_minute) %ld, %ld\r\n", em(ts), em(_time_info.next_minute+1000));
-
-        printLog("offset_time, timestamp, next minute: %ld, %ld, %ld %ld\r\n",
-        		_time_info.offset_time, ts, _time_info.next_minute, extra_seconds);
-
-		printLog("epochtimes, e_min, e_min_origin: %ld %ld %ld\r\n",
-				_time_info.epochtimesync, epoch_minute, epoch_minute_origin);
 		_status &= ~(1<<2); // clear clock not set bit
 		update_counts_status();
 		break;
@@ -650,12 +638,12 @@ void parse_bt_command(uint8_t c) {
     }
 	case '0':
 		_client_type = CLIENT_IS_BTDEV;
-		printLog("set client type %d\r\n", _client_type);
+		// printLog("set client type %d\r\n", _client_type);
 		break;
 
 	case '1':
 		_client_type = CLIENT_IS_COMPUTER;
-		printLog("set client type %d\r\n", _client_type);
+		// printLog("set client type %d\r\n", _client_type);
 		break;
 
 	default:
@@ -720,12 +708,12 @@ void parse_command(uint8_t c) {
 }
 
 int IQR(int16_t* a, int n, int *mid_index);
-
+#define PRINT_ENCOUNTER_DETAIL
 void print_encounter(int index) {
 	Encounter_record_v2 *e;
 	e = encounters+index;
 	uint8_t *temp = (uint8_t *) e;
-
+#ifdef PRINT_ENCOUNTER_DETAIL
 	printLog("encounters[%d]=\r\n", index);
 	for (int j = 0; j < 2; j++) {
 		for (int i = 0; i < 32; i++) {
@@ -733,8 +721,9 @@ void print_encounter(int index) {
 		}
 		printLog("\r\n");
 	}
+#endif
 	uint16_t *sound = (uint16_t *) e;
-	printLog("%5d", temp[11]);
+	printLog("******* Sound: %5d", temp[11]);
 	for (int i=6; i<10; i++) {
 		printLog("%5d", sound[i]);
 	}
@@ -742,7 +731,7 @@ void print_encounter(int index) {
 	flushLog();
 }
 
-#define PRINT_TIMES
+// #define PRINT_TIMES
 // #define PRINT_T_ARRAY
 void record_tof(Encounter_record_v2 *current_encounter) {
 #ifdef PRINT_TIMES
@@ -780,14 +769,34 @@ void record_tof(Encounter_record_v2 *current_encounter) {
 
 #define PRIVATE
 
+void check_time (char *msg) {
+	uint32_t ts = ts_ms();
+	if (ts > _time_info.next_minute) {
+		if (_main_state == SCAN_ADV || _main_state == DISCONNECTED ) {
+//		if (_role != ROLE_CLIENT_MASTER_UPLOAD ) {
+			printLog("%lu: %s check_time update next minute, _main_state: %d\r\n",
+					ts, msg, _main_state);
+			update_next_minute();
+			printLog("%lu: next_minute %lu\r\n",ts_ms(), _time_info.next_minute);
+		} else {
+			_update_minute_after_upload = true;
+		}
+	}
+
+}
+//#define DEBUG_SHAREDCOUNT
+
 void spp_client_main(void) {
+#ifdef DEBUG_SHAREDCOUNT
 	uint32_t prev_shared_count = 0;
+#endif
 	while (1) {
 		/* Event pointer for handling events */
 		struct gecko_cmd_packet* evt;
 
+		check_time("while loop");
 		// evt = gecko_wait_event();
-	    if (true) {
+	    if (listen_usb) {
 	      /* If SPP data mode is active, use non-blocking gecko_peek_event() */
 	      evt = gecko_peek_event();
 	      int c = RETARGET_ReadChar();
@@ -850,9 +859,19 @@ void spp_client_main(void) {
 			// if (true) {
 				// printLog("_main_state %d\r\n", _main_state);
 				// Process scan responses: this function returns 1 if we found the service we are looking for
-				if (process_scan_response(&(evt->data.evt_le_gap_scan_response), _status)
-						> 0) {
+				if (ts_ms() < (_time_info.next_minute -55000)) {
+					// printLog("%lu, next_minute: %lu: wait before connecting\r\n", ts_ms(), _time_info.next_minute);
+					break;
+				}
+				int response = process_scan_response(&(evt->data.evt_le_gap_scan_response), &_status);
+				if (response>0) {
 					struct gecko_msg_le_gap_connect_rsp_t *pResp;
+
+					if ((response==2) && (write_flash)) {
+						write_flash = false;
+						_status &= ~(1); // clear flash writing bit
+						update_counts_status();
+					}
 
 					// Match found -> stop discovery and try to connect
 					gecko_cmd_le_gap_end_procedure();
@@ -864,10 +883,18 @@ void spp_client_main(void) {
 					if (pResp->result == bg_err_success) {
 						// Make copy of connection handle for later use (for example, to cancel the connection attempt)
 						_conn_handle = pResp->connection;
+						if (_conn_handle == 0x02) {
+							printLog("***********************************\r\n");
+							gecko_cmd_le_connection_close(2);
+						}
 					} else {
 						printLog(
-								"gecko_cmd_le_gap_connect failed with code 0x%4.4x\r\n",
+								"gecko_cmd_le_gap_connect failed with code 0x%4.4x will try to close\r\n",
 								pResp->result);
+						if (pResp->result == 0x209) {
+							gecko_cmd_le_connection_close(1);
+							printLog("Trid to close extra connections\r\n");
+						}
 					}
 
 				}
@@ -879,12 +906,19 @@ void spp_client_main(void) {
 			// stop advertsing and scanning once we are connected
 		    gecko_cmd_le_gap_end_procedure();
 	        gecko_cmd_le_gap_stop_advertising(0);
-			printLog("Connected\r\n");
-			printLog("Role: %s\r\n",
+			printLog("%lu: status: %d,  Role: %s ", ts_ms(), _status,
 					(evt->data.evt_le_connection_opened.master == 0) ?
 							slave_string : master_string);
-			printLog("Handle: #%d\r\n",
+			printLog("Handle: #%d ",
 					evt->data.evt_le_connection_opened.connection);
+			printLog("state: %d ", _main_state);
+			if (evt->data.evt_le_connection_opened.connection==2) {
+				printLog("how did we get handle #2?\r\n");
+				// gecko_cmd_le_connection_close(1);
+				gecko_cmd_le_connection_close(2);
+				// printLog("tried to close 2\r\n");
+				// TODO take care of bad encounter event
+			}
 			if (evt->data.evt_le_connection_opened.master == 1) {
 				// Start service discovery (we are only interested in one UUID)
 				gecko_cmd_le_connection_set_timing_parameters(_conn_handle, conn_interval,
@@ -914,29 +948,34 @@ void spp_client_main(void) {
 			break;
 
 		case gecko_evt_le_connection_closed_id:
-			printLog("DISCONNECTED!\r\n");
-			printLog("_role, _client_type: %d, %d\r\n", _role, _client_type);
+			// printLog("DISCONNECTED!\r\n");
+			// printLog("_role, _client_type: %d, %d\r\n", _role, _client_type);
             if ( (_role==ROLE_CLIENT_MASTER) || ((_role==1) && (_client_type==0))) {
-    			// compute shared secret
-                X25519_calc_shared_secret(shared_key, private_key, current_encounter->public_key);
-                memcpy(current_encounter->public_key, shared_key, 32);
-            	// turnoff speaker or microphone
+            	if (sharedCount>0) {
+					// compute shared secret
+					X25519_calc_shared_secret(shared_key, private_key,
+							current_encounter->public_key);
+					memcpy(current_encounter->public_key, shared_key, 32);
+					// turnoff speaker or microphone
 
-				// printLog("client_type: %d, role: %d\r\n", _client_type, _role);
-				unlinkPRS();
-				if (pdm_on) {
-					pdm_pause();
-					pdm_on = false;
-				}
-				// Get usound data and record encounter in fifo
-				// record_tof(current_encounter);
-				print_encounter(c_fifo_last_idx & IDX_MASK);
-				c_fifo_last_idx++;  // this actually saves the data in the fifo
+					// printLog("client_type: %d, role: %d\r\n", _client_type, _role);
+					unlinkPRS();
+					if (pdm_on) {
+						pdm_pause();
+						pdm_on = false;
+					}
+					// Get usound data and record encounter in fifo
+					// record_tof(current_encounter);
+
+					printLog("SC: %d ", sharedCount);
+					print_encounter(c_fifo_last_idx & IDX_MASK);
+					c_fifo_last_idx++; // this actually saves the data in the fifo
+            	} else { printLog("sharedCount = 0\r\n"); }
 			}
             // reset everything
 			reset_variables();
 			SLEEP_SleepBlockEnd(sleepEM2);  // Enable sleeping after disconnect
-			gecko_cmd_hardware_set_soft_timer(32768<<1, RESTART_TIMER, true);
+			gecko_cmd_hardware_set_soft_timer(32768>>1, RESTART_TIMER, true);
 			break;
 
 		case gecko_evt_le_connection_parameters_id:
@@ -950,8 +989,8 @@ void spp_client_main(void) {
 			 * up to ATT_MTU-3 bytes can be sent at once  */
 			_max_packet_size = evt->data.evt_gatt_mtu_exchanged.mtu - 3;
 			_min_packet_size = _max_packet_size; // Try to send maximum length packets whenever possible
-			 printLog("MTU exchanged: %d\r\n",
-					evt->data.evt_gatt_mtu_exchanged.mtu);
+//			 printLog("MTU exchanged: %d\r\n",
+//					evt->data.evt_gatt_mtu_exchanged.mtu);
 			break;
 
 		case gecko_evt_gatt_service_id:  // after connection handle looking for service
@@ -1044,7 +1083,7 @@ void spp_client_main(void) {
 				break;
 			case ENABLE_NOTIF:
 				_main_state = DATA_MODE;
-				printLog("SPP Mode ON\r\n");
+				// printLog("SPP Mode ON\r\n");
 				SLEEP_SleepBlockBegin(sleepEM2); // Disable sleeping when SPP mode active
 		        linkPRS();
 				// Send rw command that a bt dev is trying to connect
@@ -1054,7 +1093,7 @@ void spp_client_main(void) {
 				send_spp_data_client();
 				break;
 			default:
-				printLog("Unhandled gatt completed event\r\n");
+				printLog("Unhandled gatt completed event: _main_state: %d\r\n", _main_state);
 				break;
 			}
 			break;
@@ -1109,12 +1148,14 @@ void spp_client_main(void) {
 					uint32_t t = RTCC_CounterGet();
 					sharedCount =
 							evt->data.evt_gatt_characteristic_value.value.data[0];
+#ifdef DEBUG_SHAREDCOUNT
 					printLog("%lu, %lu, MC SC:%3d  len: %d\r\n", t,
 							t - prev_rtcc, sharedCount,
 							evt->data.evt_gatt_characteristic_value.value.len);
+#endif
 					if (sharedCount == 2) {
 						memcpy(current_encounter->public_key, evt->data.evt_gatt_characteristic_value.value.data+1, 32);
-						printLog("got public key\r\n");
+						// printLog("got public key\r\n");
 					}
 					prev_rtcc = t;
 					if (sharedCount>20) {
@@ -1136,6 +1177,16 @@ void spp_client_main(void) {
 							evt->data.evt_gatt_characteristic_value.value.data[i]);
 				}
 				printLog("\r\n");
+				uint32_t ts = ts_ms();
+				uint32_t timeinfo[3];
+				memcpy(timeinfo, evt->data.evt_gatt_characteristic_value.value.data, 8);
+				timeinfo[1] = ts - timeinfo[1];  // subtract offset
+				timeinfo[2] = _time_info.time_overflow;
+
+				sync_clock(ts, timeinfo);
+				_status &= ~(1<<2); // clear clock not set bit
+				update_counts_status();
+
 				_main_state = FIND_UPLOAD;
 			}
 			break;
@@ -1145,32 +1196,52 @@ void spp_client_main(void) {
 			uint32_t ts = ts_ms();
 			if (ts > _time_info.next_minute) {
 				if (_role != ROLE_CLIENT_MASTER_UPLOAD) {
-				printLog("Soft timer update next minute\r\n");
-				update_next_minute();
+					printLog("Soft timer update next minute, curr: %lu, next:%lu\r\n", ts, _time_info.next_minute);
+					update_next_minute();
+				} else {
+					_update_minute_after_upload = true;
 				}
 			}
 			readBatteryLevel();
 			if (ts > (_time_info.near_hotspot_time + 60000)) {
-				write_flash = true;
+				if (!write_flash) {
+					printLog("Not near hotspot, start writing\r\n");
+					write_flash = true;
+					_status |= 0x01;
+					start_writing_flash();
+					update_counts_status();
+				}
 				// Start writing
 			}
 			switch (evt->data.evt_hardware_soft_timer.handle) {
 			case RESTART_TIMER:
+				if (_update_minute_after_upload) {  // could be due to upload or taking data
+					printLog("Handle missed update_minute\r\n");
+					// update_next_minute();
+					check_time("restart");
+					printLog("next minute: %lu\r\n", _time_info.next_minute);
+					_update_minute_after_upload = false;
+				} else {
 				// Restart discovery using the default 1M PHY
 				start_bt();
+				}
 				_main_state = SCAN_ADV;
 				break;
 			case HEARTBEAT_TIMER:
 				if ((_role == ROLE_SERVER_SLAVE)
 						&& (_client_type != CLIENT_IS_BTDEV)) {
 					if (_main_state != STATE_SPP_MODE) {
+
 						printLog(
-								"*********** check if reset needed conn_handle %d\r\n",
-								_conn_handle);
+								"*********** check if reset needed conn_handle %d state: %d role: %d\r\n",
+								_conn_handle, _main_state, _role);
+						bad_heartbeats++;
 					}
 				}
-				if (reset_needed) {
+				if (bad_heartbeats==3) {
 					gecko_cmd_le_connection_close(_conn_handle);
+					bad_heartbeats=0;
+					reset_needed = false;
 				}
 				break;
 			default:
@@ -1189,15 +1260,15 @@ void spp_client_main(void) {
 					if (pStatus->client_config_flags == gatt_notification) {
 						_main_state = STATE_SPP_MODE;
 						SLEEP_SleepBlockBegin(sleepEM2); // Disable sleeping
-						printLog("SPP Mode ON\r\n");
-						printLog("Client Type: %d\r\n", _client_type);
+						// printLog("SPP Mode ON\r\n");
+						// printLog("Client Type: %d\r\n", _client_type);
 						if (_client_type == CLIENT_IS_BTDEV) linkPRS();
 						k_speaker = k_speaker_offsets[0] + K_OFFSET;
 						// linkPRS();
 						// pdm_start();
 						// pdm_on = true;
 					} else {
-						printLog("SPP Mode OFF\r\n");
+						// printLog("SPP Mode OFF\r\n");
 						_main_state = STATE_CONNECTED;
 						SLEEP_SleepBlockEnd(sleepEM2); // Enable sleeping
 					}
@@ -1212,21 +1283,23 @@ void spp_client_main(void) {
 			v = &(evt->data.evt_gatt_server_attribute_value);
 			if (v->attribute == gattdb_Read_Write) {
 				int c = v->value.data[0];
-				printLog("new rw value %c\r\n", c);
+				// printLog("new rw value %c\r\n", c);
 				parse_bt_command(c);
 			} else if (v->attribute == gattdb_gatt_spp_data) {
 				if (_client_type == CLIENT_IS_BTDEV) {
 					if (v->value.len > 0) {
 						uint32_t t = RTCC_CounterGet();
 						sharedCount = v->value.data[0];
+#ifdef DEBUG_SHAREDCOUNT
 						printLog("%lu %lu %lu slave server SC: %d len: %d\r\n",
 								t, t - prev_rtcc, t - prev_shared_count,
 								v->value.data[0],
 								v->value.len);
+#endif
 						if (sharedCount == 1) {
 							memcpy(current_encounter->public_key,
 									v->value.data + 1, 32);
-							printLog("got public key\r\n");
+							// printLog("got public key\r\n");
 						} else {
 							if (v->value.len>1) {
 								// printLog("Got usound data, sharedCount: %d\r\n", sharedCount);
@@ -1239,7 +1312,9 @@ void spp_client_main(void) {
 							}
 						}
 						prev_rtcc = t;
+#ifdef DEBUG_SHAREDCOUNT
 						prev_shared_count = prev_rtcc;
+#endif
 						send_spp_data();
 						gecko_cmd_le_connection_get_rssi(_conn_handle);
 						k_speaker = k_speaker_offsets[sharedCount>>1] + K_OFFSET;
@@ -1259,6 +1334,7 @@ void spp_client_main(void) {
 //			printLog("%lu %lu %lu rssi: %d\r\n", t,
 //					t - prev_rtcc, t-prev_shared_count, evt->data.evt_le_connection_rssi.rssi);
 //			prev_rtcc = t;
+			// printLog("%lu: rssi: %d\r\n", ts_ms(), evt->data.evt_le_connection_rssi.rssi);
 			current_encounter->rssi_values[(_rssi_count++)%RSSI_LIST_SIZE] = evt->data.evt_le_connection_rssi.rssi;
 			break;
 		}
@@ -1278,8 +1354,11 @@ void spp_client_main(void) {
 			process_ext_signals(evt->data.evt_system_external_signal.extsignals);
 			break;
 
+		case gecko_evt_le_connection_phy_status_id:
+			break;
+
 		default:
-			printLog("Unhandled event\r\n");
+			printLog("Unhandled event  %lX\r\n", BGLIB_MSG_ID(evt->header));
 			break;
 		}
 	}
