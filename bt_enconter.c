@@ -311,16 +311,16 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 			}
 		}
 #endif
-		// 4880c12c-fdcb-4077-8920-a450d7f9b907
-		if (ad_type == 0x06 || ad_type == 0x07) {
-			// Type 0x06 = Incomplete List of 128-bit Service Class UUIDs
-			// Type 0x07 = Complete List of 128-bit Service Class UUIDs
-			if (memcmp(serviceUUID, &(pResp->data.data[i + 2]), 16) == 0) {
-				// printLog("Found SPP device\r\n");
-				// ad_match_found = 1;
-				ad_match_found = compare_mac(pResp->address.addr);
-			}
-		}
+//		// 4880c12c-fdcb-4077-8920-a450d7f9b907
+//		if (ad_type == 0x06 || ad_type == 0x07) {
+//			// Type 0x06 = Incomplete List of 128-bit Service Class UUIDs
+//			// Type 0x07 = Complete List of 128-bit Service Class UUIDs
+//			if (memcmp(serviceUUID, &(pResp->data.data[i + 2]), 16) == 0) {
+//				// printLog("Found SPP device\r\n");
+//				// ad_match_found = 1;
+//				ad_match_found = compare_mac(pResp->address.addr);
+//			}
+//		}
 		if (ad_type == 0x03) {
 			// Look for exposure notification
 			if ((pResp->data.data[i + 2] == 0x6F)

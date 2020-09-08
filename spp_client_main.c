@@ -875,6 +875,7 @@ void spp_client_main(void) {
 
 					// Match found -> stop discovery and try to connect
 					gecko_cmd_le_gap_end_procedure();
+			        gecko_cmd_le_gap_stop_advertising(0); // Need HANDLE_ADV
 
 					pResp = gecko_cmd_le_gap_connect(
 							evt->data.evt_le_gap_scan_response.address,
@@ -893,7 +894,7 @@ void spp_client_main(void) {
 								pResp->result);
 						if (pResp->result == 0x209) {
 							gecko_cmd_le_connection_close(1);
-							printLog("Trid to close extra connections\r\n");
+							printLog("Tried to close extra connections\r\n");
 						}
 					}
 
@@ -913,9 +914,9 @@ void spp_client_main(void) {
 					evt->data.evt_le_connection_opened.connection);
 			printLog("state: %d ", _main_state);
 			if (evt->data.evt_le_connection_opened.connection==2) {
-				printLog("how did we get handle #2?\r\n");
 				// gecko_cmd_le_connection_close(1);
-				gecko_cmd_le_connection_close(2);
+				int16_t result = gecko_cmd_le_connection_close(2)->result;
+				printLog("how did we get handle #2?, close result: %d  ", result);
 				// printLog("tried to close 2\r\n");
 				// TODO take care of bad encounter event
 			}
