@@ -162,7 +162,7 @@ void appMain(gecko_configuration_t *pconfig) {
 	pconfig->sleep.flags = 0;
 #endif
 
-	pconfig->bluetooth.max_connections = 2;
+	// pconfig->bluetooth.max_connections = 2; /// Use default... Hope this delays crash
 	/* Initialize debug prints. Note: debug prints are off by default. See DEBUG_LEVEL in app.h */
 	initLog();
 	DMADRV_Init();
