@@ -13,13 +13,8 @@
 
 
 #define TICKS_PER_SECOND 32768
-/*
-extern uint32_t time_overflow;   // current time overflow
-extern uint32_t offset_time;
-extern uint32_t offset_overflow;  // set of offset has overflowed
-extern uint32_t next_minute;
-extern uint32_t epochtimesync;
-*/
+
+#define ENCOUNTER_PERIOD	60000
 struct my_time_struct
 {
 	uint32_t time_overflow;

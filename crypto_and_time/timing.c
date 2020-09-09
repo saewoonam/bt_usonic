@@ -19,18 +19,12 @@ void set_new_mac_address(void);
 
 
 #define TICKS_PER_SECOND 32768
-/*
-uint32_t time_overflow=0;   // current time overflow
-uint32_t offset_time = 0;
-uint32_t offset_overflow = 0;  // set of offset has overflowed
-uint32_t next_minute = 60000;
-uint32_t epochtimesync = 0;
-*/
+
 struct my_time_struct _time_info = {
 		.time_overflow=0,
 		.offset_time = 0,
 		.offset_overflow = 0,
-		.next_minute = 60000,
+		.next_minute = ENCOUNTER_PERIOD,
 		.epochtimesync=0,
 		.gottime=false};
 
@@ -73,7 +67,7 @@ uint32_t epoch_day(void) {
 
 void update_next_minute(void) {
 	static uint32_t day = 0;
-	_time_info.next_minute +=60000;
+	_time_info.next_minute +=ENCOUNTER_PERIOD;
 	set_new_mac_address();
 
 	//  Change stuff daily... if desired.
@@ -93,12 +87,12 @@ void setup_next_minute(void) {
     uint32_t timestamp = ts_ms();
     uint32_t epoch_minute_origin = (_time_info.epochtimesync)/60;
     uint32_t extra_seconds =_time_info.epochtimesync - 60*epoch_minute_origin;
-    _time_info.next_minute = _time_info.offset_time - extra_seconds * TICKS_PER_SECOND + 60000;
+    _time_info.next_minute = _time_info.offset_time - extra_seconds * TICKS_PER_SECOND + ENCOUNTER_PERIOD;
     printLog("offset_time, timestamp, next minute: %ld, %ld, %ld\r\n",
     		_time_info.offset_time, timestamp, _time_info.next_minute);
     /*
     while (next_minute < timestamp) {
-    	next_minute += 60000;
+    	next_minute += ENCOUNTER_PERIOD;
     }
     */
 }
@@ -115,7 +109,7 @@ void sync_clock(uint32_t ts, uint32_t *timedata) {
 	uint32_t epoch_minute_origin = (_time_info.epochtimesync) / 60;
 	uint32_t extra_seconds = _time_info.epochtimesync % 60;
 	_time_info.next_minute = _time_info.offset_time - extra_seconds * 1000
-			+ 60000;
+			+ ENCOUNTER_PERIOD;
 	uint32_t dt = (ts - _time_info.offset_time) / 1000;
 	uint32_t epoch_minute = (dt + _time_info.epochtimesync) / 60;
 	printLog("em(ts), em(next_minute) %ld, %ld\r\n", em(ts),

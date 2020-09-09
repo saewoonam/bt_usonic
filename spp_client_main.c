@@ -245,6 +245,7 @@ static void reset_variables() {
 	memset(right_t, 0, 32*2);
 	_rssi_count = 0;
 	sharedCount = 0;
+	bad_heartbeats = 0;  // not sure this is the best thing,  doesn't handle 2 connections right
 }
 
 void get_local_mac(void);
@@ -859,13 +860,18 @@ void spp_client_main(void) {
 				// create random offset to reduce possible bt collisions as master
 				int offset = gecko_cmd_system_get_random_data(1)->data.data[0]%16;
 				offset *= 250;
-				if (ts_ms() < (_time_info.next_minute -58000+offset)) {
+				if (ts_ms() < (_time_info.next_minute - ENCOUNTER_PERIOD + 2000 +offset)) {
 					// printLog("%lu, next_minute: %lu: wait before connecting\r\n", ts_ms(), _time_info.next_minute);
 					break;
 				}
 				int response = process_scan_response(&(evt->data.evt_le_gap_scan_response), &_status);
 				if (response>0) {
 					struct gecko_msg_le_gap_connect_rsp_t *pResp;
+					if (response==1) {
+						_role = ROLE_CLIENT_MASTER;
+					} else {
+						_role = ROLE_CLIENT_MASTER_UPLOAD;
+					}
 
 					if ((response==2) && (write_flash)) {
 						write_flash = false;
@@ -922,16 +928,19 @@ void spp_client_main(void) {
 			}
 			if (evt->data.evt_le_connection_opened.master == 1) {
 				// Start service discovery (we are only interested in one UUID)
-				gecko_cmd_le_connection_set_timing_parameters(_conn_handle, conn_interval,
-						conn_interval, 0, 200, 0, 0xFFFF);
-
+				if (_role == ROLE_CLIENT_MASTER) {
+					gecko_cmd_le_connection_set_timing_parameters(_conn_handle, conn_interval,
+							conn_interval, 0, 200, 0, 0xFFFF);
+				} else { // set connection parameters so that it uploads faster
+			    	gecko_cmd_le_connection_set_timing_parameters(_conn_handle, 6, 6, 0, 10, 0, 0xFFFF);
+				}
 				gecko_cmd_gatt_discover_primary_services(_conn_handle);
 //				gecko_cmd_gatt_discover_primary_services_by_uuid(_conn_handle,
 //						16, serviceUUID);
 //				gecko_cmd_gatt_discover_primary_services_by_uuid(_conn_handle,
 //						2, service_upload_UUID);
 				_main_state = FIND_SERVICE;
-				_role = ROLE_CLIENT_MASTER;
+				// _role = ROLE_CLIENT_MASTER;
 
 //	    	    uint16_t result = gecko_cmd_le_gap_end_procedure()->result;
 //	    	    printLog("try to end scan, result: %x\r\n", result);
@@ -980,9 +989,11 @@ void spp_client_main(void) {
 			break;
 
 		case gecko_evt_le_connection_parameters_id:
-//			printLog("Conn.parameters: interval %u units, txsize %u\r\n",
-//					evt->data.evt_le_connection_parameters.interval,
-//					evt->data.evt_le_connection_parameters.txsize);
+			if (_role == ROLE_CLIENT_MASTER_UPLOAD) {
+				printLog("Conn.parameters: interval %u units, txsize %u\r\n",
+						evt->data.evt_le_connection_parameters.interval,
+						evt->data.evt_le_connection_parameters.txsize);
+			}
 			break;
 
 		case gecko_evt_gatt_mtu_exchanged_id:
@@ -990,8 +1001,8 @@ void spp_client_main(void) {
 			 * up to ATT_MTU-3 bytes can be sent at once  */
 			_max_packet_size = evt->data.evt_gatt_mtu_exchanged.mtu - 3;
 			_min_packet_size = _max_packet_size; // Try to send maximum length packets whenever possible
-//			 printLog("MTU exchanged: %d\r\n",
-//					evt->data.evt_gatt_mtu_exchanged.mtu);
+			 printLog("MTU exchanged: %d\r\n",
+					evt->data.evt_gatt_mtu_exchanged.mtu);
 			break;
 
 		case gecko_evt_gatt_service_id:  // after connection handle looking for service
@@ -1204,7 +1215,7 @@ void spp_client_main(void) {
 				}
 			}
 			readBatteryLevel();
-			if (ts > (_time_info.near_hotspot_time + 60000)) {
+			if (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD)) {
 				if (!write_flash) {
 					printLog("Not near hotspot, start writing\r\n");
 					write_flash = true;
