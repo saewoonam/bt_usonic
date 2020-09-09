@@ -104,6 +104,7 @@ const uint8 char_time_UUID[2] = {0x0F, 0xEC};
 #define RESTART_TIMER    1
 #define HEARTBEAT_TIMER    2
 #define GPIO_POLL_TIMER  3
+#define HANDLE_CONNECTION_TIMEOUT_TIMER 4
 
 static bool reset_needed = false;
 
@@ -204,6 +205,8 @@ bool listen_usb = true;
 /***************************************************************************************************
  Local Variables
  **************************************************************************************************/
+static bool disable_encounter;
+
 //bt connection state
 static int _main_state;
 static uint32 _service_handle;
@@ -860,14 +863,20 @@ void spp_client_main(void) {
 				// create random offset to reduce possible bt collisions as master
 				int offset = gecko_cmd_system_get_random_data(1)->data.data[0]%16;
 				offset *= 250;
-				// printLog("%lu, _main_state: %lu: wait before connecting\r\n", ts_ms(), _time_info.next_minute);
-
+				if ((_time_info.next_minute-ts_ms())> (ENCOUNTER_PERIOD-2000)) {
+//					printLog("%lu, next_minute %lu: delta:  %lu wait before connecting\r\n",
+//							ts_ms(), _time_info.next_minute, _time_info.next_minute-ts_ms());
+					disable_encounter = true;
+				}
 //				if (ts_ms() < (_time_info.next_minute - ENCOUNTER_PERIOD + 2000 +offset)) {
 //					break;
 //				}
 				// printLog("Did we break?\r\n");
 				int response = process_scan_response(&(evt->data.evt_le_gap_scan_response), &_status);
-
+				if ((response==1) && (disable_encounter)) {
+					disable_encounter = false;
+					break;
+				}
 				if (response>0) {
 					struct gecko_msg_le_gap_connect_rsp_t *pResp;
 					if (response==1) {
@@ -960,6 +969,7 @@ void spp_client_main(void) {
 	        // printLog("open connection type: %d mac: ", evt->data.evt_le_connection_opened.address_type);
 	        // print_mac(evt->data.evt_le_connection_opened.address.addr);
 	        setup_encounter_record(evt->data.evt_le_connection_opened.address.addr);
+	        gecko_cmd_hardware_set_soft_timer(3 * 32768, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
 			break;
 
 		case gecko_evt_le_connection_closed_id:
@@ -1036,6 +1046,7 @@ void spp_client_main(void) {
 		case gecko_evt_gatt_procedure_completed_id:
 			switch (_main_state) {
 			case FIND_SERVICE:
+		        gecko_cmd_hardware_set_soft_timer(0, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
 				if (_service_handle > 0) {
 					if (_role == ROLE_CLIENT_MASTER) {
 					// Service found, next search for characteristics
@@ -1239,6 +1250,11 @@ void spp_client_main(void) {
 				// Start writing
 			}
 			switch (evt->data.evt_hardware_soft_timer.handle) {
+			case HANDLE_CONNECTION_TIMEOUT_TIMER:
+				printLog("%lu: CONNECTION TIMEOUT, _role: %d, _main_state: %d\r\n",
+						ts_ms(), _role, _main_state);
+				gecko_cmd_le_connection_close(_conn_handle);
+				break;
 			case RESTART_TIMER:
 				if (_update_minute_after_upload) {  // could be due to upload or taking data
 					printLog("Handle missed update_minute\r\n");
@@ -1288,6 +1304,7 @@ void spp_client_main(void) {
 				if (pStatus->status_flags == gatt_server_client_config) {
 					// Characteristic client configuration (CCC) for spp_data has been changed
 					if (pStatus->client_config_flags == gatt_notification) {
+				        gecko_cmd_hardware_set_soft_timer(0, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
 						_main_state = STATE_SPP_MODE;
 						SLEEP_SleepBlockBegin(sleepEM2); // Disable sleeping
 						// printLog("SPP Mode ON\r\n");
