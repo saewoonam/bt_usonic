@@ -58,8 +58,8 @@
  **************************************************************************************************/
 
 
-gecko_bluetooth_ll_priorities priorities = { 175, 127, // 191, 143,  //scan_min, scan_max
-                                             175, 127,  //adv_min,  adv_max
+gecko_bluetooth_ll_priorities priorities = { 175, 15, // 191, 143,  //scan_min, scan_max
+                                             175, 15,  //adv_min,  adv_max
                                              135,   0,  //conn_min, conn_max
                                              55,  15,   //init_min, init_max
                                              175,       //threshold_coex
