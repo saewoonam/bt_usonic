@@ -143,7 +143,7 @@ void setup_adv(void) {
 	 * The first two parameters are minimum and maximum advertising interval, both in
 	 * units of (milliseconds * 1.6).  */
 	gecko_cmd_le_gap_set_advertise_timing(HANDLE_ADV, 320, 320, 0, 0);
-	gecko_cmd_le_gap_set_discovery_timing(le_gap_phy_1m, 3200, 330);
+	// gecko_cmd_le_gap_set_discovery_timing(le_gap_phy_1m, 3200, 330);
 	gecko_cmd_le_gap_set_discovery_type(le_gap_phy_1m, 0);
 
 }
@@ -158,10 +158,7 @@ void print_offsets(uint8_t *offsets) {
 #define USE_RAND_MAC
 extern uint8_t _status;
 void start_bt(void) {
-	printLog("%lu: Start BT, _status:%d\r\n", ts_ms(), _status);
-
-	// printLog("local mac addr: ");
-	// print_mac(local_mac);
+	// printLog("%lu: Start BT, _status:%d\r\n", ts_ms(), _status);
 	calc_k_offsets(local_mac, k_speaker_offsets);
 	if ((_status & (1 << 2))==0) {  //  don't advertise until clock set
 		// Slave_server mode
@@ -183,8 +180,9 @@ void start_bt(void) {
 	}
 	// Start discovery using the default 1M PHY
 	// Master_client mode
-	uint16_t res_discovery = gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic)->result;
-	printLog("%lu: Start discovery result: %d\r\n", ts_ms(), res_discovery);
+	// uint16_t res_discovery =
+	gecko_cmd_le_gap_start_discovery(1, le_gap_discover_generic); //->result;
+	// printLog("%lu: Start discovery result: %d\r\n", ts_ms(), res_discovery);
 }
 
 void set_new_mac_address(void) {
@@ -206,7 +204,8 @@ void set_new_mac_address(void) {
 		memcpy(rnd_addr.addr, rnd_response->data.data, 6);
 		response = gecko_cmd_le_gap_set_advertise_random_address(HANDLE_ADV,
 				0x01, rnd_addr);
-		printLog("create random address result: %x, ", response->result);
+		// printLog("create random address result: %x, ", response->result);
+		printLog("new random mac: ");
 		print_mac(response->address_out.addr);
 	} while (response->result > 0);
 	// if type is 0x02
@@ -388,7 +387,7 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 			}
 		}
 	}
-	// printLog("ad_match_found: %d\r\n", ad_match_found);
+	// printLog("%lu: ad_match_found: %d\r\n", ts_ms(), ad_match_found);
 	return (ad_match_found);
 }
 
@@ -466,7 +465,7 @@ void setup_encounter_record(uint8_t* mac_addr) {
 
 		printLog("remote MAC: ");
 		print_mac(mac_addr);
-		print_mac(local_mac);
+		// print_mac(local_mac);
 
 		current_encounter->minute = epoch_minute;
 		// current_encounter->version = 0xFF;
