@@ -709,7 +709,7 @@ void parse_command(uint8_t c) {
 }
 
 int IQR(int16_t* a, int n, int *mid_index);
-#define PRINT_ENCOUNTER_DETAIL
+// #define PRINT_ENCOUNTER_DETAIL
 void print_encounter(int index) {
 	Encounter_record_v2 *e;
 	e = encounters+index;
@@ -775,7 +775,7 @@ void check_time (char *msg) {
 	if (ts > _time_info.next_minute) {
 		if (_main_state == SCAN_ADV || _main_state == DISCONNECTED ) {
 //		if (_role != ROLE_CLIENT_MASTER_UPLOAD ) {
-			printLog("%lu: %s check_time update next minute, _main_state: %d\r\n",
+			printLog("%lu: %s check_time update next minute, _main_state: %d ",
 					ts, msg, _main_state);
 			update_next_minute();
 			printLog("%lu: next_minute %lu\r\n",ts_ms(), _time_info.next_minute);
@@ -860,11 +860,14 @@ void spp_client_main(void) {
 				// create random offset to reduce possible bt collisions as master
 				int offset = gecko_cmd_system_get_random_data(1)->data.data[0]%16;
 				offset *= 250;
-				if (ts_ms() < (_time_info.next_minute - ENCOUNTER_PERIOD + 2000 +offset)) {
-					// printLog("%lu, next_minute: %lu: wait before connecting\r\n", ts_ms(), _time_info.next_minute);
-					break;
-				}
+				// printLog("%lu, _main_state: %lu: wait before connecting\r\n", ts_ms(), _time_info.next_minute);
+
+//				if (ts_ms() < (_time_info.next_minute - ENCOUNTER_PERIOD + 2000 +offset)) {
+//					break;
+//				}
+				// printLog("Did we break?\r\n");
 				int response = process_scan_response(&(evt->data.evt_le_gap_scan_response), &_status);
+
 				if (response>0) {
 					struct gecko_msg_le_gap_connect_rsp_t *pResp;
 					if (response==1) {
@@ -898,7 +901,9 @@ void spp_client_main(void) {
 						printLog(
 								"gecko_cmd_le_gap_connect failed with code 0x%4.4x will try to close\r\n",
 								pResp->result);
-						if (pResp->result == 0x209) {
+						printLog("mac address problem: ");
+						print_mac(evt->data.evt_le_gap_scan_response.address.addr);
+						if (pResp->result == 0x181) {
 							gecko_cmd_le_connection_close(1);
 							printLog("Tried to close extra connections\r\n");
 						}
@@ -918,7 +923,7 @@ void spp_client_main(void) {
 							slave_string : master_string);
 			printLog("Handle: #%d ",
 					evt->data.evt_le_connection_opened.connection);
-			printLog("state: %d ", _main_state);
+			// printLog("state: %d ", _main_state);
 			if (evt->data.evt_le_connection_opened.connection==2) {
 				// gecko_cmd_le_connection_close(1);
 				int16_t result = gecko_cmd_le_connection_close(2)->result;
@@ -977,7 +982,7 @@ void spp_client_main(void) {
 					// Get usound data and record encounter in fifo
 					// record_tof(current_encounter);
 
-					printLog("SC: %d ", sharedCount);
+					printLog("%lu: SC: %d, c_fifo: [%lu] ", ts_ms(), sharedCount, c_fifo_last_idx);
 					print_encounter(c_fifo_last_idx & IDX_MASK);
 					c_fifo_last_idx++; // this actually saves the data in the fifo
             	} else { printLog("__________sharedCount = 0\r\n"); }
@@ -1001,8 +1006,8 @@ void spp_client_main(void) {
 			 * up to ATT_MTU-3 bytes can be sent at once  */
 			_max_packet_size = evt->data.evt_gatt_mtu_exchanged.mtu - 3;
 			_min_packet_size = _max_packet_size; // Try to send maximum length packets whenever possible
-			 printLog("MTU exchanged: %d\r\n",
-					evt->data.evt_gatt_mtu_exchanged.mtu);
+//			 printLog("MTU exchanged: %d\r\n",
+//					evt->data.evt_gatt_mtu_exchanged.mtu);
 			break;
 
 		case gecko_evt_gatt_service_id:  // after connection handle looking for service
