@@ -143,7 +143,7 @@ void setup_adv(void) {
 	 * The first two parameters are minimum and maximum advertising interval, both in
 	 * units of (milliseconds * 1.6).  */
 	gecko_cmd_le_gap_set_advertise_timing(HANDLE_ADV, 320, 320, 0, 0);
-	// gecko_cmd_le_gap_set_discovery_timing(le_gap_phy_1m, 3200, 330);
+	gecko_cmd_le_gap_set_discovery_timing(le_gap_phy_1m, 3200, 330);
 	gecko_cmd_le_gap_set_discovery_type(le_gap_phy_1m, 0);
 
 }

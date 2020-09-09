@@ -1213,12 +1213,20 @@ void spp_client_main(void) {
 			uint32_t ts = ts_ms();
 			if (ts > _time_info.next_minute) {
 				if (_role != ROLE_CLIENT_MASTER_UPLOAD) {
-					printLog("Soft timer update next minute, curr: %lu, next:%lu\r\n", ts, _time_info.next_minute);
-					update_next_minute();
-				} else {
+					if (_main_state > 1) {
+						// trying to take data, so wait
+						_update_minute_after_upload = true;
+					} else {
+						printLog(
+								"Soft timer update next minute, curr: %lu, next:%lu\r\n",
+								ts, _time_info.next_minute);
+						update_next_minute();
+					}
+				} else if (_role == ROLE_CLIENT_MASTER_UPLOAD) {
 					_update_minute_after_upload = true;
 				}
 			}
+
 			readBatteryLevel();
 			if (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD)) {
 				if (!write_flash) {
@@ -1253,6 +1261,11 @@ void spp_client_main(void) {
 								"*********** check if reset needed conn_handle %d state: %d role: %d\r\n",
 								_conn_handle, _main_state, _role);
 						bad_heartbeats++;
+						if (_conn_handle ==2) {
+							gecko_cmd_le_connection_close(_conn_handle);
+							bad_heartbeats=0;
+							reset_needed = false;
+						}
 					}
 				}
 				if (bad_heartbeats==3) {
