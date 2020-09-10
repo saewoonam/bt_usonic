@@ -36,6 +36,7 @@
 #include "crypto_and_time/crypto.h"
 #include "crypto_and_time/timing.h"
 #include "ota.h"
+#include "usound/alarm.h"
 
 /***************************************************************************************************
  Local Macros and Definitions
