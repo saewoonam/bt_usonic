@@ -41,6 +41,8 @@ void startLDMA_PDM(void);
 void init_speaker(void);
 void adcInit(void);
 
+void initTIMER2(void);
+
 void timer0_prescale(int prescale) {
 	// Initialize the timer
 	TIMER_Init_TypeDef timerInit = TIMER_INIT_DEFAULT;
@@ -143,8 +145,7 @@ void TIMER1_IRQHandler(void) {
 	TIMER_IntClear(TIMER1, flags);
 	static uint32_t prev = 0;
 		timer1_RTCC = RTCC_CounterGet();
-
-		// printLog("%lu, %4lu,  %4lu:TX\r\n", timer1_RTCC, timer1_RTCC - prev_rtcc, timer1_RTCC-prev);
+		printLog("%lu, %4lu,  %4lu:TX\r\n", timer1_RTCC, timer1_RTCC - prev_rtcc, timer1_RTCC-prev);
 		prev_rtcc = timer1_RTCC;
 		prev = prev_rtcc;
 }
@@ -152,6 +153,7 @@ void TIMER1_IRQHandler(void) {
 static void initTimers() {
 	initTIMER0();
 	initTIMER1();
+	initTIMER2();
 }
 
 
