@@ -108,6 +108,8 @@ void initMcu(void)
   RMU->CTRL = (RMU->CTRL & ~_RMU_CTRL_SYSRMODE_MASK) | RMU_CTRL_SYSRMODE_DEFAULT;
 #endif
 
+  // EMU->CTRL = (EMU->CTRL & (~_EMU_RSTCTRL_SYSRMODE_MASK)) | _EMU_RSTCTRL_SYSRMODE_LIMITED;
+
 }
 
 static void initMcu_clocks(void)
