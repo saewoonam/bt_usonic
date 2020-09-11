@@ -75,6 +75,7 @@ void populateBuffers(int k_value) {
 //	return 0;
 //}
 
+void timer1_prescale(int prescale);
 
 void startDMADRV_TMR(void);
 
@@ -86,6 +87,7 @@ bool dma_tmr_comp_cb(unsigned int channel, unsigned int sequenceNo,
 	// printLog("tmr_comp_cb: channel %d, sequenceNo %d\r\n", channel, sequenceNo);
 	TIMER_Enable(TIMER1, false);
 	speaker_on=false;
+    timer1_prescale(0);
 
 	startDMADRV_TMR();
 	return 0;
