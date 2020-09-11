@@ -148,7 +148,9 @@ void read_encounters_tracking(void);
 
 void readBatteryLevel(void);
 
-void timer0_prescale(int prescale);
+// void timer0_prescale(int prescale);
+void timer1_prescale(int prescale);
+
 void play_speaker(void);
 void initTIMER1(void);
 
@@ -563,12 +565,14 @@ void parse_bt_command(uint8_t c) {
 		break;
 	}
 	case 'S': {
-		timer0_prescale(4);
-		k_speaker = 440;
-		pulse_width = 10e-3;
+		//timer1_prescale(0);
+		printLog("Got S: cfg 0x%4lX\r\n", TIMER1->CFG);
+		timer1_prescale(0);
+		k_speaker = 138;
+		pulse_width = 3e-3;
 		populateBuffers(k_speaker);
 		play_speaker();
-		timer0_prescale(0);
+		// timer1_prescale(0);
 		pulse_width = 1e-3;
 		break;
 	}
@@ -912,7 +916,7 @@ void spp_client_main(void) {
 						// in encounter mode, check if data collected already
 						int idx = in_encounters_fifo(p_scan_response->address.addr,
 								epoch_minute);
-						printLog("%lu: lookback at idx: %d\r\n", ts_ms(), idx);
+						// printLog("%lu: lookback at idx: %d\r\n", ts_ms(), idx);
 #ifndef CHECK_PAST
 						idx = -1;
 #endif
@@ -936,7 +940,7 @@ void spp_client_main(void) {
 					// Match found -> stop discovery and try to connect
 					gecko_cmd_le_gap_end_procedure();
 			        gecko_cmd_le_gap_stop_advertising(0); // Need HANDLE_ADV
-			        printLog("Make a connection\r\n");
+			        // printLog("Make a connection\r\n");
 					pResp = gecko_cmd_le_gap_connect(
 							evt->data.evt_le_gap_scan_response.address,
 							evt->data.evt_le_gap_scan_response.address_type, 1);
@@ -1021,7 +1025,7 @@ void spp_client_main(void) {
 			// just in case we closed before timer expired
 	        gecko_cmd_hardware_set_soft_timer(0, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
 
-			printLog("DISCONNECTED!\r\n");
+			// printLog("DISCONNECTED!\r\n");
 			// printLog("_role, _client_type: %d, %d\r\n", _role, _client_type);
             if ( (_role==ROLE_CLIENT_MASTER) || ((_role==1) && (_client_type==0))) {
             	if (sharedCount>0) {
