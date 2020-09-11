@@ -137,6 +137,7 @@ void initTIMER1(void) {
 	NVIC_EnableIRQ(TIMER1_IRQn);
 	// Enable the TIMER
 	// TIMER_Enable(TIMER1, true);
+	printLog("Done with TIMER1 init\r\n");
 }
 
 void TIMER1_IRQHandler(void) {
@@ -153,7 +154,7 @@ void TIMER1_IRQHandler(void) {
 static void initTimers() {
 	initTIMER0();
 	initTIMER1();
-	initTIMER2();
+	// initTIMER2();
 }
 
 

@@ -74,6 +74,8 @@
 #define K_OFFSET	276
 #define K_OFFSET2	428
 
+#define CHECK_PAST
+
 const char *version_str = "Version: " __DATE__ " " __TIME__;
 const char *ota_version = "2.0";
 
@@ -148,6 +150,12 @@ void readBatteryLevel(void);
 
 void timer0_prescale(int prescale);
 void play_speaker(void);
+void initTIMER1(void);
+
+void store_special_mark(uint8_t num);
+
+int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
+void calc_k_offsets(uint8_t *mac, uint8_t *offsets);
 
 // int32_t calc_k_from_mac(uint8_t *mac);
 
@@ -208,6 +216,7 @@ bool listen_usb = true;
  **************************************************************************************************/
 static bool disable_encounter;
 
+static int connection_count = 0;
 //bt connection state
 static int _main_state;
 static uint32 _service_handle;
@@ -530,6 +539,10 @@ void parse_bt_command(uint8_t c) {
 		printLog("Stop writing to flash\r\n");
         break;
 	}
+	case 'W': {
+		play_alarm();
+		break;
+	}
 	case 'A': {
 		uint32_t ts = ts_ms();
 		send_ota_uint32(ts);
@@ -559,21 +572,6 @@ void parse_bt_command(uint8_t c) {
 		pulse_width = 1e-3;
 		break;
 	}
-//	case 'o': {
-//		uint8_t time_evt[32];
-//        get_uint32(&(_time_info.epochtimesync));
-//        get_uint32(&(_time_info.offset_time));
-//        get_uint32(&(_time_info.offset_overflow));
-//		printLog("epochtime offset_times: %ld %ld %ld\r\n",
-//				_time_info.epochtimesync, _time_info.offset_time, _time_info.offset_overflow);
-//		memset(time_evt, 0, 32);
-//		memcpy(time_evt+4, &(_time_info.epochtimesync), 4);
-//		memcpy(time_evt+8, &(_time_info.offset_time), 4);
-//		memcpy(time_evt+12, &(_time_info.offset_overflow), 4);
-//	    store_event(time_evt);
-//	    setup_next_minute();
-//		break;
-//	}
 	case 'B': { //bt scan parameters
 		uint16_t *scan_params;
 
@@ -779,8 +777,8 @@ void check_time (char *msg) {
 	if (ts > _time_info.next_minute) {
 		if (_main_state == SCAN_ADV || _main_state == DISCONNECTED ) {
 //		if (_role != ROLE_CLIENT_MASTER_UPLOAD ) {
-			printLog("%lu: %s check_time update next minute, _main_state: %d ",
-					ts, msg, _main_state);
+			printLog("%lu: %s check_time, _main_state: %d, _status:%d ",
+					ts, msg, _main_state, _status);
 			update_next_minute();
 			printLog("%lu: next_minute %lu\r\n",ts_ms(), _time_info.next_minute);
 		} else {
@@ -788,6 +786,11 @@ void check_time (char *msg) {
 		}
 	}
 
+}
+
+void alarm_finished(void) {
+	// TODO restore _main_state before playing alarm
+	initTIMER1();
 }
 //#define DEBUG_SHAREDCOUNT
 
@@ -869,10 +872,6 @@ void spp_client_main(void) {
 //							ts_ms(), _time_info.next_minute, _time_info.next_minute-ts_ms());
 					disable_encounter = true;
 				}
-//				if (ts_ms() < (_time_info.next_minute - ENCOUNTER_PERIOD + 2000 +offset)) {
-//					break;
-//				}
-				// printLog("Did we break?\r\n");
 				int response = process_scan_response(&(evt->data.evt_le_gap_scan_response), &_status);
 				if ((response==1) && (disable_encounter)) {
 					disable_encounter = false;
@@ -880,22 +879,64 @@ void spp_client_main(void) {
 				}
 				if (response>0) {
 					struct gecko_msg_le_gap_connect_rsp_t *pResp;
-					if (response==1) {
-						_role = ROLE_CLIENT_MASTER;
-					} else {
+					if (response==2) {
 						_role = ROLE_CLIENT_MASTER_UPLOAD;
+						if (write_flash) {
+							printLog("%lu: Stop recording\r\n", ts_ms());
+							write_flash = false;
+							_status &= ~(1); // clear flash writing bit
+							update_counts_status();
+						}
+					} else {
+						_role = ROLE_CLIENT_MASTER;
+
+						// Check if already found during this epoch_minute
+						uint32_t timestamp = ts_ms();
+						if (timestamp > _time_info.next_minute) {
+							// Need to update key and mac address...
+							update_next_minute();
+							_role = ROLE_UNKNOWN;
+							break;
+							// return 0;
+						}
+						struct gecko_msg_le_gap_scan_response_evt_t *p_scan_response = &(evt->data.evt_le_gap_scan_response);
+						uint32_t epoch_minute = ((timestamp
+								- _time_info.offset_time) / 1000
+								+ _time_info.epochtimesync) / 60;
+						if (_status & (1 << 2)) {
+							update_next_minute();
+							_role = ROLE_UNKNOWN;
+							break;
+							//return 0;
+						}
+						// in encounter mode, check if data collected already
+						int idx = in_encounters_fifo(p_scan_response->address.addr,
+								epoch_minute);
+						printLog("%lu: lookback at idx: %d\r\n", ts_ms(), idx);
+#ifndef CHECK_PAST
+						idx = -1;
+#endif
+						if (idx >= 0) {
+							// printLog("Connected during this minute already\r\n");
+							update_next_minute();
+							_role = ROLE_UNKNOWN;
+							break;
+							// ad_match_found = 0;
+						} else {
+							// calculate k_goertzels
+							calc_k_offsets(p_scan_response->address.addr,
+									k_goertzel_offsets);
+							// printLog("k goertzel offsets: ");
+							// print_offsets(k_goertzel_offsets);
+						}
+
 					}
 
-					if ((response==2) && (write_flash)) {
-						write_flash = false;
-						_status &= ~(1); // clear flash writing bit
-						update_counts_status();
-					}
 
 					// Match found -> stop discovery and try to connect
 					gecko_cmd_le_gap_end_procedure();
 			        gecko_cmd_le_gap_stop_advertising(0); // Need HANDLE_ADV
-
+			        printLog("Make a connection\r\n");
 					pResp = gecko_cmd_le_gap_connect(
 							evt->data.evt_le_gap_scan_response.address,
 							evt->data.evt_le_gap_scan_response.address_type, 1);
@@ -928,11 +969,12 @@ void spp_client_main(void) {
 			// stop advertsing and scanning once we are connected
 		    gecko_cmd_le_gap_end_procedure();
 	        gecko_cmd_le_gap_stop_advertising(0);
+	        connection_count++;
 			printLog("%lu: status: %d,  Role: %s ", ts_ms(), _status,
 					(evt->data.evt_le_connection_opened.master == 0) ?
 							slave_string : master_string);
-			printLog("Handle: #%d ",
-					evt->data.evt_le_connection_opened.connection);
+			printLog("Handle: #%d, count:%d ",
+					evt->data.evt_le_connection_opened.connection, connection_count);
 			// printLog("state: %d ", _main_state);
 			if (evt->data.evt_le_connection_opened.connection==2) {
 				// gecko_cmd_le_connection_close(1);
@@ -965,6 +1007,7 @@ void spp_client_main(void) {
 //				gecko_cmd_le_connection_set_timing_parameters(_conn_handle, conn_interval,
 //						conn_interval, 0, 200, 0, 0xFFFF);
 				_role = ROLE_SERVER_SLAVE;
+
 			}
 	        current_encounter = encounters + (c_fifo_last_idx & IDX_MASK);
 	        // printLog("open connection type: %d mac: ", evt->data.evt_le_connection_opened.address_type);
@@ -974,7 +1017,11 @@ void spp_client_main(void) {
 			break;
 
 		case gecko_evt_le_connection_closed_id:
-			// printLog("DISCONNECTED!\r\n");
+			connection_count--;
+			// just in case we closed before timer expired
+	        gecko_cmd_hardware_set_soft_timer(0, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
+
+			printLog("DISCONNECTED!\r\n");
 			// printLog("_role, _client_type: %d, %d\r\n", _role, _client_type);
             if ( (_role==ROLE_CLIENT_MASTER) || ((_role==1) && (_client_type==0))) {
             	if (sharedCount>0) {
@@ -1027,6 +1074,8 @@ void spp_client_main(void) {
 //				printLog("%02X ", evt->data.evt_gatt_service.uuid.data[i]);
 //			}
 //			printLog("\r\n");
+	        gecko_cmd_hardware_set_soft_timer(0, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
+
 			if (evt->data.evt_gatt_service.uuid.len == 16) {
 				if (memcmp(serviceUUID, evt->data.evt_gatt_service.uuid.data,
 						16) == 0) {
@@ -1242,7 +1291,7 @@ void spp_client_main(void) {
 			readBatteryLevel();
 			if (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD)) {
 				if (!write_flash) {
-					printLog("Not near hotspot, start writing\r\n");
+					printLog("%lu: Not near hotspot, start writing\r\n", ts_ms());
 					write_flash = true;
 					_status |= 0x01;
 					start_writing_flash();
@@ -1277,7 +1326,7 @@ void spp_client_main(void) {
 						printLog(
 								"*********** check if reset needed conn_handle %d state: %d role: %d\r\n",
 								_conn_handle, _main_state, _role);
-						bad_heartbeats++;
+						// bad_heartbeats++;
 						if (_conn_handle ==2) {
 							gecko_cmd_le_connection_close(_conn_handle);
 							bad_heartbeats=0;
@@ -1331,6 +1380,7 @@ void spp_client_main(void) {
 			v = &(evt->data.evt_gatt_server_attribute_value);
 			if (v->attribute == gattdb_Read_Write) {
 				int c = v->value.data[0];
+		        gecko_cmd_hardware_set_soft_timer(0, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
 				// printLog("new rw value %c\r\n", c);
 				parse_bt_command(c);
 			} else if (v->attribute == gattdb_gatt_spp_data) {
@@ -1390,6 +1440,8 @@ void spp_client_main(void) {
 		case gecko_evt_gatt_server_user_read_request_id:
 			printLog("user read request characteristic: %d\r\n",
 					(evt->data.evt_gatt_server_user_read_request.characteristic));
+	        gecko_cmd_hardware_set_soft_timer(0, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
+
 			if (evt->data.evt_gatt_server_user_read_request.characteristic
 					== gattdb_battery_level) {
 				gecko_cmd_gatt_server_send_user_read_response(

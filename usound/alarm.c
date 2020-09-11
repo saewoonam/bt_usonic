@@ -9,11 +9,15 @@
 // #include "em_emu.h"
 // #include "em_chip.h"
 #include "em_gpio.h"
+#include "app.h"
 
 #define ALARM_FREQ 4000
 #define C4
 
+void alarm_finished(void);
+
 void initTIMER1_alarm(void) {
+	NVIC_DisableIRQ(TIMER1_IRQn);
 	uint32_t timerFreq = 0;
 	// Initialize the timer
 	TIMER_Init_TypeDef timerInit = TIMER_INIT_DEFAULT;
@@ -51,6 +55,9 @@ void initTIMER1_alarm(void) {
 }
 
 void initTIMER2(void) {
+
+	CMU_ClockEnable(cmuClock_TIMER2, true);
+
 	// Initialize the timer
 	TIMER_Init_TypeDef timerInit = TIMER_INIT_DEFAULT;
 	// Configure TIMER2 Compare/Capture for output compare
@@ -90,7 +97,7 @@ void TIMER2_IRQHandler(void) {
 	uint32_t flags = TIMER_IntGet(TIMER2);
 	TIMER_IntClear(TIMER2, flags);
 
-	// printf("IRQ Handler\r\n");
+	printLog("IRQ Handler\r\n");
 	GPIO_PinOutToggle(gpioPortB, 0);
 	TIMER_Enable(TIMER1, play);
 	if (play) {
@@ -103,19 +110,21 @@ void TIMER2_IRQHandler(void) {
 	if (count==0) {
 		TIMER_Enable(TIMER2, false);
 		TIMER_Enable(TIMER1, false);
-		set_state_start_scan();
-		//_main_state = SCAN_ADV;
+		printLog("Done with alarm\r\n");
+		alarm_finished();
+
 	}
 
 }
 
 void init_alarm() {
+	GPIO_PinModeSet(gpioPortB, 0, gpioModePushPull, 0);     // SPKR_POS
+
 	initTIMER1_alarm();
 	// initTIMER2();
 }
 
 void play_alarm(void) {
-	//_main_state = DISCONNECTED;
-	set_state_disconnected();
+	initTIMER1_alarm();
 	TIMER_Enable(TIMER2, true);
 }
