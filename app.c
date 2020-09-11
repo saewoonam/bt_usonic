@@ -106,6 +106,19 @@ void TIMER0_IRQHandler(void) {
 	}
 }
 
+void timer1_prescale(int prescale) {
+	// Initialize the timer
+	TIMER_Enable(TIMER1, false);
+	TIMER_Init_TypeDef timerInit = TIMER_INIT_DEFAULT;
+	timerInit.enable = false;
+	timerInit.clkSel = timerClkSelHFPerClk;
+	timerInit.prescale = prescale;
+	timerInit.riseAction = timerInputActionReloadStart;
+
+	TIMER_Init(TIMER1, &timerInit);
+	// TIMER_Enable(TIMER1, true);
+}
+
 void initTIMER1(void) {
 	// Enable clock for TIMER1 module
 	CMU_ClockEnable(cmuClock_TIMER1, true);
@@ -146,7 +159,7 @@ void TIMER1_IRQHandler(void) {
 	TIMER_IntClear(TIMER1, flags);
 	static uint32_t prev = 0;
 		timer1_RTCC = RTCC_CounterGet();
-		printLog("%lu, %4lu,  %4lu:TX\r\n", timer1_RTCC, timer1_RTCC - prev_rtcc, timer1_RTCC-prev);
+		// printLog("%lu, %4lu,  %4lu:TX\r\n", timer1_RTCC, timer1_RTCC - prev_rtcc, timer1_RTCC-prev);
 		prev_rtcc = timer1_RTCC;
 		prev = prev_rtcc;
 }
@@ -154,7 +167,7 @@ void TIMER1_IRQHandler(void) {
 static void initTimers() {
 	initTIMER0();
 	initTIMER1();
-	// initTIMER2();
+	initTIMER2();
 }
 
 
