@@ -67,11 +67,10 @@ uint32_t epoch_day(void) {
 
 void update_next_minute(void) {
 	static uint32_t day = 0;
-	_time_info.next_minute +=ENCOUNTER_PERIOD;
-	printLog("update_next_minute: ");
-//	do {
-//
-//	} while (ts_ms() < _time_info.next_minute);
+	while (ts_ms() > _time_info.next_minute) {
+		printLog("update_next_minute: ");
+		_time_info.next_minute +=ENCOUNTER_PERIOD;
+	}
 	set_new_mac_address();
 
 	//  Change stuff daily... if desired.
