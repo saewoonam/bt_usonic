@@ -399,6 +399,24 @@ bool verifyErased(uint32_t address, uint32_t len)
   spi_setCsInactive();
   return true;
 }
+/*  Added by SaeWoo to look for special mark */
+bool verifyMark(uint32_t address, uint32_t len, uint8_t mark)
+{
+  waitUntilNotBusy();
+
+  spi_setCsActive();
+  sendCommand(CMD_READ_DATA, address);
+
+  while (len--) {
+    if (spi_readByte() != mark) {
+      /*  Do I need a spi_setCsInactive here? */
+      spi_setCsInactive();
+      return false;
+    }
+  }
+  spi_setCsInactive();
+  return true;
+}
 
 static void writePage(uint32_t address, const uint8_t *data, uint32_t length)
 {
