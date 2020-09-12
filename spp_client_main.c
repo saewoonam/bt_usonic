@@ -128,6 +128,7 @@ void pdm_pause(void);
 
 void populateBuffers(int k_value);
 void startDMADRV_TMR(void);
+void stopDMADRV_TMR(void);
 
 void update_public_key(void);
 void set_new_mac_address(void);
@@ -148,10 +149,9 @@ void read_encounters_tracking(void);
 
 void readBatteryLevel(void);
 
-// void timer0_prescale(int prescale);
-void timer1_prescale(int prescale);
-
 void play_speaker(void);
+void setBuffer(uint16_t top_value, int n);
+void beep(uint16_t pitch);
 void initTIMER1(void);
 
 void store_special_mark(uint8_t num);
@@ -211,6 +211,7 @@ uint8_t local_mac[6];
 uint8_t battBatteryLevel = 0;
 
 extern uint8_t public_key[32];
+
 
 bool listen_usb = true;
 /***************************************************************************************************
@@ -567,13 +568,7 @@ void parse_bt_command(uint8_t c) {
 	case 'S': {
 		//timer1_prescale(0);
 		printLog("Got S: cfg 0x%4lX\r\n", TIMER1->CFG);
-		timer1_prescale(0);
-		k_speaker = 138;
-		pulse_width = 3e-3;
-		populateBuffers(k_speaker);
-		play_speaker();
-		// timer1_prescale(0);
-		pulse_width = 1e-3;
+		beep(880);
 		break;
 	}
 	case 'B': { //bt scan parameters
@@ -908,7 +903,6 @@ void spp_client_main(void) {
 								- _time_info.offset_time) / 1000
 								+ _time_info.epochtimesync) / 60;
 						if (_status & (1 << 2)) {
-							update_next_minute();
 							_role = ROLE_UNKNOWN;
 							break;
 							//return 0;
@@ -922,7 +916,6 @@ void spp_client_main(void) {
 #endif
 						if (idx >= 0) {
 							// printLog("Connected during this minute already\r\n");
-							update_next_minute();
 							_role = ROLE_UNKNOWN;
 							break;
 							// ad_match_found = 0;
@@ -1293,7 +1286,8 @@ void spp_client_main(void) {
 			}
 
 			readBatteryLevel();
-			if (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD)) {
+			if ( (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD)) &&
+					(_client_type == CLIENT_IS_BTDEV) ) {
 				if (!write_flash) {
 					printLog("%lu: Not near hotspot, start writing\r\n", ts_ms());
 					write_flash = true;
