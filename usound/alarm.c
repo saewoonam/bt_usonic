@@ -125,6 +125,7 @@ void init_alarm() {
 }
 
 void play_alarm(void) {
+	stopDMADRV_TMR();
 	initTIMER1_alarm();
 	TIMER_Enable(TIMER2, true);
 }
