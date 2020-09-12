@@ -87,7 +87,8 @@ spp_client_main.o: ../spp_client_main.c \
  /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/platform/bootloader/api/application_properties.h \
  ../spiflash/btl_interface_parser.h ../spiflash/btl_interface_storage.h \
  ../spiflash/btl_storage_bootloadinfo.h ../encounter/encounter.h \
- ../crypto_and_time/crypto.h ../crypto_and_time/timing.h ../ota.h
+ ../crypto_and_time/crypto.h ../crypto_and_time/timing.h ../ota.h \
+ ../usound/alarm.h
 
 /Users/nams/SimplicityStudio/v4_workspace/bt-usonic/crypto_and_time/monocypher.h:
 
@@ -282,3 +283,5 @@ spp_client_main.o: ../spp_client_main.c \
 ../crypto_and_time/timing.h:
 
 ../ota.h:
+
+../usound/alarm.h:
