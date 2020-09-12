@@ -79,6 +79,18 @@ void determine_counts(uint32_t flash_size) {
 	//gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4, (const uint8*) &count);
 }
 
+bool verifyMark(uint32_t address, uint32_t len, uint8_t mark);
+
+void find_mark_in_flash(uint8_t mark) {
+	int count=encounter_count;
+	bool found=false;
+	do {
+		found = verifyMark(count<<5, 32, mark);
+		if (!found) count--;
+	} while (!found & (count >= 0));
+	_encounters_tracker.start_upload = count++;
+}
+
 //void test_write_flash() {
 //	uint32_t addr=0;
 //	uint8_t buffer[32];
@@ -149,6 +161,12 @@ void store_time() {
 	_time_info.offset_time = offset_time;
 */
     store_event(time_evt);
+}
+
+void store_special_mark(uint8_t num){
+    uint8_t evt[32];
+	memset(evt, num, 32);
+    store_event(evt);
 }
 
 extern struct my_encounter_index _encounters_tracker;
