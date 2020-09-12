@@ -160,24 +160,23 @@ extern uint8_t _status;
 void start_bt(void) {
 	// printLog("%lu: Start BT, _status:%d\r\n", ts_ms(), _status);
 	calc_k_offsets(local_mac, k_speaker_offsets);
-	if ((_status & (1 << 2))==0) {  //  don't advertise until clock set
-		// Slave_server mode
-		/* Start advertising in user mode */
-		// advertise with name and custom service
+	//if ((_status & (1 << 2))==0) {  //  don't advertise until clock set
+	// Slave_server mode
+	/* Start advertising in user mode */
+	// advertise with name and custom service
 #ifdef ADV_NAME
-		uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
-				le_gap_general_discoverable,
-				le_gap_undirected_connectable)->result;
+	uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
+			le_gap_general_discoverable,
+			le_gap_undirected_connectable)->result;
 #else
-		//uint16_t res =
-			gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
-				le_gap_user_data,
-				// le_gap_undirected_connectable)
-				// le_gap_connectable_non_scannable)  // this does not work
-				le_gap_connectable_scannable); //->result;
+	//uint16_t res =
+	gecko_cmd_le_gap_start_advertising(HANDLE_ADV, le_gap_user_data,
+	// le_gap_undirected_connectable)
+	// le_gap_connectable_non_scannable)  // this does not work
+			le_gap_connectable_scannable); //->result;
 #endif
-		// printLog("Start adv result: %x\r\n", res);
-	}
+	// printLog("Start adv result: %x\r\n", res);
+	//}
 	// Start discovery using the default 1M PHY
 	// Master_client mode
 	// uint16_t res_discovery =
@@ -294,6 +293,10 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 
 	// printLog("Process scan ");
 	// print_mac(pResp->address.addr);
+	if (pResp->rssi <-90) {
+		return 0;
+	}
+	// printLog("%lu: process_scan rssi: %d\r\n", ts_ms(),  pResp->rssi);
 	while (i < (pResp->data.len - 1)) {
 
 		ad_len = pResp->data.data[i];
