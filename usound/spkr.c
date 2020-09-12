@@ -159,10 +159,13 @@ void init_speaker(void) {
 #endif
 }
 
-void beep(uint16_t pitch) {
+void beep(uint16_t period) {
 	stopDMADRV_TMR();
 	timer1_prescale(9); // this will get reset to 0 in the DMA callback
-	setBuffer(880, 500);
+	// scale buffer size to frequency/pitch of 880
+	int len = (880*500) / period;
+	printLog("period: %d, len: %d\r\n", period, len);
+	setBuffer(period, len);
 	startDMADRV_TMR();
 	play_speaker();
 }

@@ -382,7 +382,11 @@ static void send_upload_data() {
 		printLog("Upload finished start_upload: %lu\r\n", _encounters_tracker.start_upload);
 		if (_encounters_tracker.start_upload==encounter_count) {
 			// mark flash
+			printLog("%lu: before mark tracker: %lu, count %lu\r\n",ts_ms(), _encounters_tracker.start_upload, encounter_count);
+
 			store_special_mark(4);
+			printLog("%lu: after mark tracker: %lu, count %lu\r\n",ts_ms(),  _encounters_tracker.start_upload, encounter_count);
+			_encounters_tracker.start_upload = encounter_count;
 		}
 	}
 
@@ -892,6 +896,13 @@ void spp_client_main(void) {
 				if (response>0) {
 					struct gecko_msg_le_gap_connect_rsp_t *pResp;
 					if (response==2) {
+						// printLog("%lu: upload? _status: %d\r\n", ts_ms(), _status);
+						if ((_encounters_tracker.start_upload == encounter_count) &&
+								!(_status & (1 << 2)) ){
+							// printLog("%lu: do not connect to uploaod. _status: %d\r\n", ts_ms(), _status);
+							break;
+						}
+
 						_role = ROLE_CLIENT_MASTER_UPLOAD;
 						if (write_flash) {
 							printLog("%lu: Stop recording\r\n", ts_ms());
@@ -1140,8 +1151,15 @@ void spp_client_main(void) {
 				break;
 			case FIND_UPLOAD:
 				if (_char_upload_handle > 0) {
-					// printLog("Try to send upload data\r\n");
-					send_upload_data();
+					if (_encounters_tracker.start_upload<encounter_count) {
+						// printLog("Try to send upload data\r\n");
+						send_upload_data();
+					} else {
+						printLog("Skip upload\r\n");
+						_main_state = FINISHED_UPLOAD;
+						// have to close here b/c not gatt service to complete
+						gecko_cmd_le_connection_close(_conn_handle);
+					}
 				} else {
 					// No characteristic found? -> disconnect
 					printLog("UPLOAD char not found?\r\n");
@@ -1359,7 +1377,7 @@ void spp_client_main(void) {
 				break;
 			case HANDLE_BEEP_TIMER:
 				beep_count--;
-				beep(880);
+				beep(880<<1);
 				if (beep_count == 0) {
 			        gecko_cmd_hardware_set_soft_timer(0, HANDLE_BEEP_TIMER, true);
 				}

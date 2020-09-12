@@ -85,10 +85,13 @@ void find_mark_in_flash(uint8_t mark) {
 	int count=encounter_count;
 	bool found=false;
 	do {
+		// printLog("find_mark_in_flash: %d\r\n", count);
 		found = verifyMark(count<<5, 32, mark);
 		if (!found) count--;
 	} while (!found & (count >= 0));
-	_encounters_tracker.start_upload = count++;
+	printLog("done: find_mark_in_flash: %d\r\n", count);
+
+	_encounters_tracker.start_upload = ++count;
 }
 
 //void test_write_flash() {

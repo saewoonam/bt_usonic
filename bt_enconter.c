@@ -156,7 +156,7 @@ void print_offsets(uint8_t *offsets) {
 }
 
 #define USE_RAND_MAC
-extern uint8_t _status;
+// extern uint8_t _status;
 void start_bt(void) {
 	// printLog("%lu: Start BT, _status:%d\r\n", ts_ms(), _status);
 	calc_k_offsets(local_mac, k_speaker_offsets);
@@ -341,9 +341,10 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 				// bluetooth hotspot nearby so stop writing.
 				_time_info.near_hotspot_time = ts_ms();
 				// check if there is new data
-				if (_encounters_tracker.start_upload < encounter_count) {
+				// if (_encounters_tracker.start_upload < encounter_count) {
+					//printLog("tracker: %lu, count %lu\r\n", _encounters_tracker.start_upload, encounter_count);
 					ad_match_found = 2;
-				}
+				// }
 			}
 		}
 		if (ad_type == 0x06 || ad_type == 0x07) {
