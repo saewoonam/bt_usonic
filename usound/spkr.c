@@ -39,6 +39,14 @@ bool speaker_on = false;
 
 unsigned int ldma_channelTMR_TOPV, ldma_channelTMR_COMP;
 
+void setBuffer(uint16_t top_value, int n) {
+	numWaves = n;
+	top = top_value;
+	for(int i=0; i<numWaves; i++) {
+		list_pwm[i] = top>>1;
+	}
+}
+
 void populateBuffers(int k_value) {
 	// float pulse_width = 5e-3;
 	int pw = pulse_width*1000;
@@ -50,7 +58,7 @@ void populateBuffers(int k_value) {
 	// printLog("k: %d\r\n", k);
 	calculate_period_k(k, pulse_width, BUFFER_SIZE, &top,
 			&numWaves);
-	// printLog("numWaves %d top %d\r\n", numWaves, top);
+//	printLog("numWaves %d top %d\r\n", numWaves, top);
 //	calculate_periods_list(freq_start, freq_stop, pulse_width, list_top,
 //			&numWaves);
 //	printLog("numWaves %d top %d\r\n", numWaves, list_top[0]);
@@ -113,6 +121,10 @@ void startDMADRV_TMR(void) {
 			true, numWaves, dmadrvDataSize2, dma_tmr_comp_cb, NULL);
 }
 
+void stopDMADRV_TMR(void) {
+	DMADRV_StopTransfer(ldma_channelTMR_COMP);
+}
+
 void init_speaker(void) {
 	// Setup ldma channels
 	//	uint32_t e0 = DMADRV_AllocateChannel(&ldma_channelTMR_TOPV, NULL);
@@ -145,6 +157,14 @@ void init_speaker(void) {
 			(gpioPortC << _GPIO_TIMER_CC1ROUTE_PORT_SHIFT)
 					| (4 << _GPIO_TIMER_CC1ROUTE_PIN_SHIFT);
 #endif
+}
+
+void beep(uint16_t pitch) {
+	stopDMADRV_TMR();
+	timer1_prescale(9); // this will get reset to 0 in the DMA callback
+	setBuffer(880, 500);
+	startDMADRV_TMR();
+	play_speaker();
 }
 
 /*
