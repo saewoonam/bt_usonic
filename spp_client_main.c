@@ -917,6 +917,7 @@ void spp_client_main(void) {
 						uint32_t timestamp = ts_ms();
 						if (timestamp > _time_info.next_minute) {
 							// Need to update key and mac address...
+							// don't connect
 							update_next_minute();
 							_role = ROLE_UNKNOWN;
 							break;
@@ -927,6 +928,7 @@ void spp_client_main(void) {
 								- _time_info.offset_time) / 1000
 								+ _time_info.epochtimesync) / 60;
 						if (_status & (1 << 2)) {
+							// don't connect if clock  is not set
 							_role = ROLE_UNKNOWN;
 							break;
 							//return 0;
@@ -939,6 +941,7 @@ void spp_client_main(void) {
 						idx = -1;
 #endif
 						if (idx >= 0) {
+							// don't connect if already connected in the past minute
 							// printLog("Connected during this minute already\r\n");
 							_role = ROLE_UNKNOWN;
 							break;
