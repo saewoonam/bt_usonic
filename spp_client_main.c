@@ -108,6 +108,7 @@ const uint8 char_time_UUID[2] = {0x0F, 0xEC};
 #define HEARTBEAT_TIMER    2
 #define GPIO_POLL_TIMER  3
 #define HANDLE_CONNECTION_TIMEOUT_TIMER 4
+#define HANDLE_BEEP_TIMER              5
 
 static bool reset_needed = false;
 
@@ -128,7 +129,7 @@ void pdm_pause(void);
 
 void populateBuffers(int k_value);
 void startDMADRV_TMR(void);
-void stopDMADRV_TMR(void);
+// void stopDMADRV_TMR(void);
 
 void update_public_key(void);
 void set_new_mac_address(void);
@@ -149,12 +150,13 @@ void read_encounters_tracking(void);
 
 void readBatteryLevel(void);
 
-void play_speaker(void);
-void setBuffer(uint16_t top_value, int n);
+// void play_speaker(void);
+// void setBuffer(uint16_t top_value, int n);
 void beep(uint16_t pitch);
 void initTIMER1(void);
 
 void store_special_mark(uint8_t num);
+void find_mark_in_flash(uint8_t mark);
 
 int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 void calc_k_offsets(uint8_t *mac, uint8_t *offsets);
@@ -240,6 +242,8 @@ static int8  _rssi_count = 0;
 static int bad_heartbeats = 0;
 static int8 _client_type = -1;
 static bool sending_ota = false;
+static int beep_count = 0;
+
 uint8 _status = 1<<2;  // start with clock not set bit
 static bool _update_minute_after_upload = false;
 static void reset_variables() {
@@ -376,6 +380,10 @@ static void send_upload_data() {
 	if (done) {
 		_main_state = FINISHED_UPLOAD;
 		printLog("Upload finished start_upload: %lu\r\n", _encounters_tracker.start_upload);
+		if (_encounters_tracker.start_upload==encounter_count) {
+			// mark flash
+			store_special_mark(4);
+		}
 	}
 
 }
@@ -568,7 +576,9 @@ void parse_bt_command(uint8_t c) {
 	case 'S': {
 		//timer1_prescale(0);
 		printLog("Got S: cfg 0x%4lX\r\n", TIMER1->CFG);
-		beep(880);
+		gecko_cmd_hardware_set_lazy_soft_timer(32768>>1, 32768>>1, HANDLE_BEEP_TIMER, 0);
+		beep_count = 3;
+		// beep(880);
 		break;
 	}
 	case 'B': { //bt scan parameters
@@ -841,7 +851,10 @@ void spp_client_main(void) {
 			  printLog("storage_init: %ld %ld\r\n", flash_ret, flash_size);
 			  determine_counts(flash_size);
 			  read_encounters_tracking();
-			  _encounters_tracker.start_upload = 0;
+			  find_mark_in_flash(4);
+			  printLog("_encounters_tracker.start_upload: %lu\r\n",
+					  _encounters_tracker.start_upload);
+			  // _encounters_tracker.start_upload = 0;
 			  read_name_ps();
 
 			// ***************
@@ -1042,6 +1055,12 @@ void spp_client_main(void) {
 					c_fifo_last_idx++; // this actually saves the data in the fifo
             	} else { printLog("__________sharedCount = 0\r\n"); }
 			}
+            if  ((_role==ROLE_SERVER_SLAVE) && (_client_type!=0)) {
+            	// reset time looking for hotspoot
+            	printLog("Reset near_hotspot_time\r\n");
+            	_time_info.near_hotspot_time = ts_ms();
+            }
+            printLog("DISCONNECTING: _client_type: %d\r\n", _client_type);
             // reset everything
 			reset_variables();
 			SLEEP_SleepBlockEnd(sleepEM2);  // Enable sleeping after disconnect
@@ -1289,7 +1308,7 @@ void spp_client_main(void) {
 			if ( (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD)) &&
 					(_client_type == CLIENT_IS_BTDEV) ) {
 				if (!write_flash) {
-					printLog("%lu: Not near hotspot, start writing\r\n", ts_ms());
+					printLog("%lu: Not near hotspot, start writing %lu\r\n", ts_ms(), _time_info.near_hotspot_time);
 					write_flash = true;
 					_status |= 0x01;
 					start_writing_flash();
@@ -1338,6 +1357,12 @@ void spp_client_main(void) {
 					reset_needed = false;
 				}
 				break;
+			case HANDLE_BEEP_TIMER:
+				beep_count--;
+				beep(880);
+				if (beep_count == 0) {
+			        gecko_cmd_hardware_set_soft_timer(0, HANDLE_BEEP_TIMER, true);
+				}
 			default:
 				break;
 			}
