@@ -340,6 +340,7 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 //						encounter_count, _encounters_tracker.start_upload);
 				// bluetooth hotspot nearby so stop writing.
 				_time_info.near_hotspot_time = ts_ms();
+				// check if there is new data
 				if (_encounters_tracker.start_upload < encounter_count) {
 					ad_match_found = 2;
 				}
