@@ -20,10 +20,11 @@ extern int out;
 extern bool update_k_goertzel;
 extern uint8_t sharedCount;
 extern uint8_t k_goertzel_offsets[12];
+extern int32_t k_calibrate;
 
 #define PDM_INTERRUPTS
 #define GOERTZEL
-#define K_OFFSET	(276+16)
+#define K_OFFSET	268
 #define K_OFFSET2	428
 
 
@@ -224,7 +225,7 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 //				printf("%ld, %ld, %ld, **** calc_chirp\r\n",
 //						curr, curr-prev_rtcc, curr-t0);
 //				prev_rtcc = curr;
-				filter_biquad(left, 0);
+				filter_biquad(left, 1);
 //				curr = RTCC_CounterGet();
 //				printf("%ld, %ld, %ld, **** filter_biquad\r\n",
 //						curr, curr-prev_rtcc, curr-t0);
@@ -251,7 +252,7 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 				if (out == 2)
 					dump_array((uint8_t *) corr, BUFFER_SIZE << 1);
 
-				filter_biquad(right, 0);
+				filter_biquad(right, 1);
 				memset(corr, 0, BUFFER_SIZE << 1);
 				calc_cross(right, BUFFER_SIZE, pdm_template, N_pdm_template,
 						corr);
@@ -306,7 +307,11 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 //				printLog("Update k_goertzel, sc: %d k_goertzel %ld\r\n",
 //						sharedCount, k_goertzel);
 				// reset update
+				if (k_calibrate<=256) {
 				k_goertzel = k_goertzel_offsets[sharedCount >> 1] + K_OFFSET;
+				} else {
+					k_goertzel = k_calibrate;
+				}
 				// k_goertzel =  k_goertzel_offsets[2] + K_OFFSET;
 				update_k_goertzel = false;
 			}
