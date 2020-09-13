@@ -1081,7 +1081,7 @@ void spp_client_main(void) {
 	        // print_mac(evt->data.evt_le_connection_opened.address.addr);
 	        setup_encounter_record(evt->data.evt_le_connection_opened.address.addr);
 	        if (conn_interval == 64) {
-		        gecko_cmd_hardware_set_soft_timer(3 * 32768, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
+		        gecko_cmd_hardware_set_soft_timer(5 * 32768, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
 
 	        } else {
 	        	gecko_cmd_hardware_set_soft_timer(10 * 32768, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
