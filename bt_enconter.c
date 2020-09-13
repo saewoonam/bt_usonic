@@ -27,6 +27,8 @@ extern uint8 serviceUUID[16];
 extern uint8_t k_speaker_offsets[12];
 extern uint8_t k_goertzel_offsets[12];
 
+extern bool enable_slave;
+extern bool enable_master;
 // void update_public_key(void);
 int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 // extern int32_t k_goertzel;
@@ -36,7 +38,7 @@ int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 
 /* end globals **************/
 
-#define K_OFFSET	276
+#define K_OFFSET	268
 #define K_OFFSET2	428
 /* Definitions of external signals */
 #define BUTTON_PRESSED (1 << 0)
@@ -48,6 +50,8 @@ int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 #define _KEY_WITH_ADV
 // #define RANDOM_MAC
 #define CHECK_PAST
+
+uint8_t offset_list[12] = {0, 8, 20, 32, 40, 48, 56, 64, 88, 96, 104, 112};
 
 struct {
 	uint8_t flagsLen; /* Length of the Flags field. */
@@ -103,13 +107,15 @@ int32_t calc_k_from_mac(uint8_t *mac) {
 }
 
 int32_t calc_k_offset(uint8_t index) {
-	index %= 8;
-	// index %= 14;
-	if (index < 18) {
-		return (index << 3);
-	} else {
-		return 152 + ((index - 18) << 3);
-	}
+	// printLog("offset[%d]: %d\r\n", index%12, offset_list[index%12]);
+	return offset_list[index%8];
+//		index %= 8;
+//	// index %= 14;
+//	if (index < 18) {
+//		return (index << 3);
+//	} else {
+//		return 152 + ((index - 18) << 3);
+//	}
 }
 
 void calc_k_offsets(uint8_t *mac, uint8_t *offsets) {
@@ -161,23 +167,23 @@ void print_offsets(uint8_t *offsets) {
 void start_bt(void) {
 	// printLog("%lu: Start BT, _status:%d\r\n", ts_ms(), _status);
 	calc_k_offsets(local_mac, k_speaker_offsets);
-	//if ((_status & (1 << 2))==0) {  //  don't advertise until clock set
-	// Slave_server mode
-	/* Start advertising in user mode */
-	// advertise with name and custom service
+	if (enable_slave) {
+		// Slave_server mode
+		/* Start advertising in user mode */
+		// advertise with name and custom service
 #ifdef ADV_NAME
-	uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
-			le_gap_general_discoverable,
-			le_gap_undirected_connectable)->result;
+		uint16_t res = gecko_cmd_le_gap_start_advertising(HANDLE_ADV,
+				le_gap_general_discoverable,
+				le_gap_undirected_connectable)->result;
 #else
-	//uint16_t res =
-	gecko_cmd_le_gap_start_advertising(HANDLE_ADV, le_gap_user_data,
-	// le_gap_undirected_connectable)
-	// le_gap_connectable_non_scannable)  // this does not work
-			le_gap_connectable_scannable); //->result;
+		//uint16_t res =
+		gecko_cmd_le_gap_start_advertising(HANDLE_ADV, le_gap_user_data,
+		// le_gap_undirected_connectable)
+		// le_gap_connectable_non_scannable)  // this does not work
+				le_gap_connectable_scannable); //->result;
 #endif
-	// printLog("Start adv result: %x\r\n", res);
-	//}
+		// printLog("Start adv result: %x\r\n", res);
+	}
 	// Start discovery using the default 1M PHY
 	// Master_client mode
 	// uint16_t res_discovery =
@@ -332,7 +338,14 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 			// Look for exposure notification
 			if ((pResp->data.data[i + 2] == 0x6F)
 					&& (pResp->data.data[i + 3] == 0xFD)) {
-				ad_match_found = compare_mac(pResp->address.addr);
+
+				if(enable_master && enable_slave) { // normal mode
+					ad_match_found = compare_mac(pResp->address.addr);
+				} else {
+					printLog("cal mode\r\n");
+					ad_match_found = 1; // in calibration mode
+				}
+				// ad_match_found = compare_mac(pResp->address.addr);
 				// printLog("found exposure uuid\r\n");
 			}
 			if ((pResp->data.data[i + 2] == 0x19)
@@ -354,7 +367,12 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 			if (memcmp(serviceUUID, &(pResp->data.data[i + 2]), 16) == 0) {
 				// printLog("Found SPP device\r\n");
 				// ad_match_found = 1;
-				ad_match_found = compare_mac(pResp->address.addr);
+				if(enable_master && enable_slave) { // normal mode
+					ad_match_found = compare_mac(pResp->address.addr);
+				} else {
+					printLog("cal mode\r\n");
+					ad_match_found = 1; // in calibration mode
+				}
 			}
 		}
 
@@ -363,36 +381,36 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 		i = i + ad_len + 1;
 	}
 
-	// Check if already found during this epoch_minute
-	if (ad_match_found==1) {
-		// check if already got data
-		// printLog("Found match, check if seen in previous time period\r\n");
-		uint32_t timestamp = ts_ms();
-		if (timestamp > _time_info.next_minute) {
-			// Need to update key and mac address...
-			update_next_minute();
-			return 0;
-		}
-		uint32_t epoch_minute = ((timestamp - _time_info.offset_time) / 1000
-				+ _time_info.epochtimesync) / 60;
-		if (*status & (1<<2)) return 0;
-		if ((*status & (1 << 3)) == 0) {  // Check if in encounter mode
-			// in encounter mode, check if data collected already
-			int idx = in_encounters_fifo(pResp->address.addr, epoch_minute);
-#ifndef CHECK_PAST
-			idx = -1;
-#endif
-			if (idx >= 0) {
-				// printLog("Connected during this minute already\r\n");
-				ad_match_found = 0;
-			} else {
-				// calculate k_goertzels
-				calc_k_offsets(pResp->address.addr, k_goertzel_offsets);
-				// printLog("k goertzel offsets: ");
-				// print_offsets(k_goertzel_offsets);
-			}
-		}
-	}
+//	// Check if already found during this epoch_minute
+//	if (ad_match_found==1) {
+//		// check if already got data
+//		// printLog("Found match, check if seen in previous time period\r\n");
+//		uint32_t timestamp = ts_ms();
+//		if (timestamp > _time_info.next_minute) {
+//			// Need to update key and mac address...
+//			update_next_minute();
+//			return 0;
+//		}
+//		uint32_t epoch_minute = ((timestamp - _time_info.offset_time) / 1000
+//				+ _time_info.epochtimesync) / 60;
+//		if (*status & (1<<2)) return 0;
+//		if ((*status & (1 << 3)) == 0) {  // Check if in encounter mode
+//			// in encounter mode, check if data collected already
+//			int idx = in_encounters_fifo(pResp->address.addr, epoch_minute);
+//#ifndef CHECK_PAST
+//			idx = -1;
+//#endif
+//			if (idx >= 0) {
+//				// printLog("Connected during this minute already\r\n");
+//				ad_match_found = 0;
+//			} else {
+//				// calculate k_goertzels
+//				calc_k_offsets(pResp->address.addr, k_goertzel_offsets);
+//				// printLog("k goertzel offsets: ");
+//				// print_offsets(k_goertzel_offsets);
+//			}
+//		}
+//	}
 	// printLog("%lu: ad_match_found: %d\r\n", ts_ms(), ad_match_found);
 	return (ad_match_found);
 }
