@@ -103,7 +103,8 @@ int32_t calc_k_from_mac(uint8_t *mac) {
 }
 
 int32_t calc_k_offset(uint8_t index) {
-	index %= 14;
+	index %= 8;
+	// index %= 14;
 	if (index < 18) {
 		return (index << 3);
 	} else {
