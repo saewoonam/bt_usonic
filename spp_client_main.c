@@ -143,7 +143,6 @@ void start_writing_flash();
 // void store_event(uint8_t *event);
 void flash_erase();
 void determine_counts(uint32_t flash_size);
-void flash_erase();
 void read_name_ps(void);
 void set_name(uint8_t *name);
 void read_encounters_tracking(void);
@@ -1037,8 +1036,13 @@ void spp_client_main(void) {
 	        // printLog("open connection type: %d mac: ", evt->data.evt_le_connection_opened.address_type);
 	        // print_mac(evt->data.evt_le_connection_opened.address.addr);
 	        setup_encounter_record(evt->data.evt_le_connection_opened.address.addr);
-	        gecko_cmd_hardware_set_soft_timer(3 * 32768, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
-			break;
+	        if (conn_interval == 64) {
+		        gecko_cmd_hardware_set_soft_timer(3 * 32768, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
+
+	        } else {
+	        	gecko_cmd_hardware_set_soft_timer(10 * 32768, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
+	        }
+	        break;
 
 		case gecko_evt_le_connection_closed_id:
 			connection_count--;
