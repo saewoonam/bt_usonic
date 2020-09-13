@@ -35,6 +35,8 @@ extern uint32_t p_fifo_last_idx;
 extern uint32_t encounter_count;
 extern bool write_flash;
 
+extern struct my_encounter_index _encounters_tracker;
+
 /***************************************************************************************************
 external functions
  **************************************************************************************************/
@@ -117,6 +119,7 @@ void flash_erase() {
 		printLog("Problem with erasing flash. %ld\r\n", retCode);
 	} else {
 		encounter_count = 0;
+		_encounters_tracker.start_upload = 0;
 		update_counts_status();
 		// gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4, (const uint8*) &encounter_count);
 		// untransferred_start = 0;
@@ -171,8 +174,6 @@ void store_special_mark(uint8_t num){
 	memset(evt, num, 32);
     store_event(evt);
 }
-
-extern struct my_encounter_index _encounters_tracker;
 
 void read_encounters_tracking(void) {
 	uint16 key = 0x4001;
