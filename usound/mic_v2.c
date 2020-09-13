@@ -23,7 +23,7 @@ extern uint8_t k_goertzel_offsets[12];
 
 #define PDM_INTERRUPTS
 #define GOERTZEL
-#define K_OFFSET	276
+#define K_OFFSET	(276+16)
 #define K_OFFSET2	428
 
 
@@ -39,6 +39,9 @@ uint32_t pongBuffer[PP_BUFFER_SIZE];
 bool prevBufferPing;
 unsigned int ldma_channelPDM;
 bool recording = false;
+
+bool _compute_all = true;
+
 // end PDM stuff
 #define RECORD_TX
 
@@ -137,7 +140,7 @@ void PDM_IRQHandler(void) {
 
 void dump_array(uint8_t *data, int len) {
 	uint8_t *temp = data;
-	printLog("DATA %d\r\n", len);
+	printLog("DATA %d %ld\r\n", len, k_goertzel);
 	while (len > 0) {
 		RETARGET_WriteChar(*temp++);
 		len--;
@@ -212,7 +215,7 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 //			printf("%ld, %ld, %ld, %d ----:g[%ld]: %e, %e\r\n", curr, curr-prev_rtcc, curr-t0, sequenceNo,
 //					k_goertzel, P_left, P_right);
 //			prev_rtcc = curr;
-			if ((P_left > 2e3) || (P_right > 2e3)) {
+			if ((P_left > 2e3) || (P_right > 2e3) || _compute_all) {
 
 				calc_chirp_v2(k_goertzel, pulse_width, pdm_template,
 						&N_pdm_template);
