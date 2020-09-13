@@ -71,10 +71,8 @@
 
 #define RSSI_LIST_SIZE (12)
 
-#define K_OFFSET	276
+#define K_OFFSET	268
 #define K_OFFSET2	428
-
-#define CHECK_PAST
 
 const char *version_str = "Version: " __DATE__ " " __TIME__;
 const char *ota_version = "2.0";
@@ -166,6 +164,7 @@ bool pdm_on = false;
 
 int32_t k_goertzel = 276;
 int32_t k_speaker = 276;
+int32_t k_calibrate = -1;
 uint8_t k_speaker_offsets[12];
 uint8_t k_goertzel_offsets[12];
 
@@ -208,6 +207,9 @@ uint8 _conn_handle = 0xFF;
 uint8 _max_packet_size = 20;
 uint8 _min_packet_size = 20;  // Target minimum bytes for one packet
 uint8_t local_mac[6];
+// enable bt for encounters
+bool enable_slave = true;
+bool enable_master = true;
 
 uint8_t battBatteryLevel = 0;
 
@@ -219,6 +221,7 @@ bool listen_usb = true;
  Local Variables
  **************************************************************************************************/
 static bool disable_encounter;
+static bool check_past = true;
 
 static int connection_count = 0;
 //bt connection state
@@ -313,7 +316,14 @@ static void send_spp_data_client() {
 		// printLog("********send PUBLIC KEY from client\r\n");
 		memcpy(temp+1, public_key, 32);
 		len = 33;
-	} else if (sharedCount==20) {
+	} else if (sharedCount==2) {
+		// Send mac address
+		// printLog("%lu: SC send mac ", ts_ms());
+		// print_mac(local_mac);
+		memcpy(temp+1, local_mac, 6);
+		// print_mac(temp+1);
+		len=7;
+	} else if (sharedCount == 20) {
 		unlinkPRS();
 		// printLog("send spp data client, got %d\r\n", sharedCount);
 		// printLog("*******send usound _data_idx %d\r\n", _data_idx);
@@ -669,12 +679,36 @@ void parse_bt_command(uint8_t c) {
 
 void parse_command(uint8_t c) {
 	switch (c) {
+	case 'a': { // check past = false
+		check_past = false;
+		break;
+	}
+	case 'A': { // check past = false
+		check_past = true;
+		break;
+	}
+	case 'n': {  // normal mode
+		enable_slave = true;
+		enable_master = true;
+		break;
+	}
+	case 'm': {  // calibrationo master onlu mode
+		enable_slave = false;
+		enable_master = true;
+		break;
+	}
+	case 's': {  // calibration slave onlu mode
+		enable_slave = true;
+		enable_master = false;
+		break;
+	}
 	case 'k': {
 		int16_t temp = 0;
 		read_serial((uint8_t *)&temp, 2);
 		printLog("Got k=%d\r\n", temp);
 		k_goertzel = temp;
 		k_speaker = temp;
+		k_calibrate = temp;
 		populateBuffers(k_speaker);
 
 		break;
@@ -791,6 +825,8 @@ void check_time (char *msg) {
 //		if (_role != ROLE_CLIENT_MASTER_UPLOAD ) {
 			printLog("%lu: %s check_time, _main_state: %d, _status:%d ",
 					ts, msg, _main_state, _status);
+//	        printLog("%lu: enable_master %d, enable_slave %d\r\n", ts_ms(),
+//	        		enable_master, enable_slave);
 			update_next_minute();
 			printLog("%lu: next_minute %lu\r\n",ts_ms(), _time_info.next_minute);
 		} else {
@@ -880,9 +916,10 @@ void spp_client_main(void) {
 		case gecko_evt_le_gap_scan_response_id:
 			if (_main_state == SCAN_ADV) {
 				// create random offset to reduce possible bt collisions as master
-				int offset = gecko_cmd_system_get_random_data(1)->data.data[0]%16;
-				offset *= 250;
-				if ((_time_info.next_minute-ts_ms())> (ENCOUNTER_PERIOD-2000)) {
+				// int offset = gecko_cmd_system_get_random_data(1)->data.data[0]%16;
+				int offset = local_mac[0] %16;
+				offset *= 50;
+				if ((_time_info.next_minute-ts_ms())> (ENCOUNTER_PERIOD-2000-offset)) {
 //					printLog("%lu, next_minute %lu: delta:  %lu wait before connecting\r\n",
 //							ts_ms(), _time_info.next_minute, _time_info.next_minute-ts_ms());
 					disable_encounter = true;
@@ -892,6 +929,7 @@ void spp_client_main(void) {
 					disable_encounter = false;
 					break;
 				}
+				// printLog("%lu: response %d\r\n", ts_ms(), response);
 				if (response>0) {
 					struct gecko_msg_le_gap_connect_rsp_t *pResp;
 					if (response==2) {
@@ -911,7 +949,6 @@ void spp_client_main(void) {
 						}
 					} else {
 						_role = ROLE_CLIENT_MASTER;
-
 						// Check if already found during this epoch_minute
 						uint32_t timestamp = ts_ms();
 						if (timestamp > _time_info.next_minute) {
@@ -921,6 +958,11 @@ void spp_client_main(void) {
 							_role = ROLE_UNKNOWN;
 							break;
 							// return 0;
+						}
+						if (!enable_master) {
+							printLog("%lu: MASTER disabled\r\n", ts_ms());
+							_role = ROLE_UNKNOWN;
+							break;
 						}
 						struct gecko_msg_le_gap_scan_response_evt_t *p_scan_response = &(evt->data.evt_le_gap_scan_response);
 						uint32_t epoch_minute = ((timestamp
@@ -936,9 +978,9 @@ void spp_client_main(void) {
 						int idx = in_encounters_fifo(p_scan_response->address.addr,
 								epoch_minute);
 						// printLog("%lu: lookback at idx: %d\r\n", ts_ms(), idx);
-#ifndef CHECK_PAST
-						idx = -1;
-#endif
+						if (!check_past) {
+							idx = -1;
+						}
 						if (idx >= 0) {
 							// don't connect if already connected in the past minute
 							// printLog("Connected during this minute already\r\n");
@@ -955,7 +997,7 @@ void spp_client_main(void) {
 
 					}
 
-
+					// printLog("Try to connect\r\n");
 					// Match found -> stop discovery and try to connect
 					gecko_cmd_le_gap_end_procedure();
 			        gecko_cmd_le_gap_stop_advertising(0); // Need HANDLE_ADV
@@ -993,6 +1035,8 @@ void spp_client_main(void) {
 		    gecko_cmd_le_gap_end_procedure();
 	        gecko_cmd_le_gap_stop_advertising(0);
 	        connection_count++;
+	        //printLog("%lu: enable_master %d, enable_slave %d\r\n", ts_ms(),
+	        //		enable_master, enable_slave);
 			printLog("%lu: status: %d,  Role: %s ", ts_ms(), _status,
 					(evt->data.evt_le_connection_opened.master == 0) ?
 							slave_string : master_string);
@@ -1408,7 +1452,11 @@ void spp_client_main(void) {
 						// printLog("SPP Mode ON\r\n");
 						// printLog("Client Type: %d\r\n", _client_type);
 						if (_client_type == CLIENT_IS_BTDEV) linkPRS();
-						k_speaker = k_speaker_offsets[0] + K_OFFSET;
+						if (k_calibrate <=256 ) {
+							k_speaker = k_speaker_offsets[0] + K_OFFSET;
+						} else {
+							k_speaker = k_calibrate;
+						}
 						// linkPRS();
 						// pdm_start();
 						// pdm_on = true;
@@ -1446,8 +1494,11 @@ void spp_client_main(void) {
 							memcpy(current_encounter->public_key,
 									v->value.data + 1, 32);
 							// printLog("got public key\r\n");
-						} else {
-							if (v->value.len>1) {
+						} else if (sharedCount==3) {
+							memcpy(current_encounter->mac, v->value.data + 1, 6);
+							printLog("%lu: SC got mac: ", ts_ms());
+							print_mac(current_encounter->mac);
+						} else if (v->value.len>1) {
 								// printLog("Got usound data, sharedCount: %d\r\n", sharedCount);
 								int16_t *usound_data = (int16_t *) (v->value.data + 2);
 								current_encounter->usound.n = v->value.data[1];
@@ -1455,7 +1506,6 @@ void spp_client_main(void) {
 								current_encounter->usound.left_irq = usound_data[1];
 								current_encounter->usound.right = usound_data[2];
 								current_encounter->usound.right_irq = usound_data[3];
-							}
 						}
 						prev_rtcc = t;
 #ifdef DEBUG_SHAREDCOUNT
@@ -1463,7 +1513,12 @@ void spp_client_main(void) {
 #endif
 						send_spp_data();
 						gecko_cmd_le_connection_get_rssi(_conn_handle);
-						k_speaker = k_speaker_offsets[sharedCount>>1] + K_OFFSET;
+						if (k_calibrate <= 256) {
+							k_speaker = k_speaker_offsets[sharedCount >> 1]
+									+ K_OFFSET;
+						} else {
+							k_speaker = k_calibrate;
+						}
 						populateBuffers(k_speaker);
 						// printLog("Update index: %d k_speaker: %ld\r\n", sharedCount>>1, k_speaker);
 					}
