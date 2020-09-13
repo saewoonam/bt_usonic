@@ -160,19 +160,20 @@ void filter_biquad(int16_t *x, uint8_t filter) {
 	float delay1=0;
 	float delay2=0;
 	float a1, a2, b0, b1, b2;
-
-	if (filter==0) {
+	// use https://arachnoid.com/BiQuadDesigner/
+	// sample frequency = 100kHz
+	if (filter==0) { //10kHz high pass
 		a1 = -1.14292982;
 		a2 = 0.41273895;
 		b0 = 0.63891719;
 		b1 = -1.27783439;
 		b2 = 0.63891719;
-	} else {
-		a1 = -1.91118480;
-		a2 = 0.91496354;
-		b0 = 0.95653708;
-		b1 = -1.91307417;
-		b2 = 0.95653708;
+	} else { // 20 kHz high pass
+		a1 = -0.36950494;
+		a2 = 0.19574310;
+		b0 = 0.39131201;
+		b1 = -0.78262402;
+		b2 = 0.39131201;
 	}
 	for (int i=0; i< BUFFER_SIZE; i++) {
 		y = b0 * x[i] + delay1;
