@@ -57,6 +57,7 @@
 #define UPLOAD_DATA 	12
 #define FINISHED_UPLOAD 	13
 #define TIME_SYNC	 	14
+#define PLAY_BEEP		15
 #define ROLE_UNKNOWN 		-1
 #define ROLE_CLIENT_MASTER 	0
 #define ROLE_SERVER_SLAVE 	1
@@ -231,6 +232,7 @@ static uint16 _char_handle;
 static uint16 _char_upload_handle;
 static uint16 _char_time_handle;
 static uint16 _char_rw_handle;
+static int pre_beep_state = -1;
 
 static int8 _role = ROLE_UNKNOWN;
 uint8_t local_mac[6];
@@ -245,6 +247,7 @@ static int bad_heartbeats = 0;
 static int8 _client_type = -1;
 static bool sending_ota = false;
 static int beep_count = 0;
+static uint16_t beep_period = 880;
 
 uint8 _status = 1<<2;  // start with clock not set bit
 static bool _update_minute_after_upload = false;
@@ -470,6 +473,19 @@ void unlinkPRS() {
 			_PRS_ASYNC_CH_CTRL_SIGSEL_NONE);
 }
 
+void play_beep(int count, uint16_t period, bool restore_state) {
+	if (restore_state) {
+		pre_beep_state = _main_state;
+		_main_state = PLAY_BEEP;
+	} else {  // don't store state
+		pre_beep_state = PLAY_BEEP;
+	}
+	beep_count = count;
+	beep_period = period;
+	gecko_cmd_hardware_set_lazy_soft_timer(32768 >> 1, 32768 >> 1,
+			HANDLE_BEEP_TIMER, 0);
+}
+
 /**
  * @brief  SPP client mode main loop
  */
@@ -589,6 +605,8 @@ void parse_bt_command(uint8_t c) {
 	case 'S': {
 		//timer1_prescale(0);
 		printLog("Got S: cfg 0x%4lX\r\n", TIMER1->CFG);
+		pre_beep_state = _main_state;
+		_main_state = PLAY_BEEP;
 		gecko_cmd_hardware_set_lazy_soft_timer(32768>>1, 32768>>1, HANDLE_BEEP_TIMER, 0);
 		beep_count = 3;
 		// beep(880);
@@ -829,6 +847,7 @@ void check_time (char *msg) {
 //	        		enable_master, enable_slave);
 			update_next_minute();
 			printLog("%lu: next_minute %lu\r\n",ts_ms(), _time_info.next_minute);
+			// play_beep(1, 880<<1, false);
 		} else {
 			_update_minute_after_upload = true;
 		}
@@ -1022,6 +1041,7 @@ void spp_client_main(void) {
 						if (pResp->result == 0x181) {
 							gecko_cmd_le_connection_close(1);
 							printLog("Tried to close extra connections\r\n");
+							play_beep(1, 880, false);
 						}
 					}
 
@@ -1115,7 +1135,10 @@ void spp_client_main(void) {
 					printLog("%lu: SC: %d, c_fifo: [%lu] ", ts_ms(), sharedCount, c_fifo_last_idx);
 					print_encounter(c_fifo_last_idx & IDX_MASK);
 					c_fifo_last_idx++; // this actually saves the data in the fifo
-            	} else { printLog("__________sharedCount = 0\r\n"); }
+				} else {
+					printLog("__________sharedCount = 0\r\n");
+					play_beep(1, 880, false);
+				}
 			}
             if  ((_role==ROLE_SERVER_SLAVE) && (_client_type!=0)) {
             	// reset time looking for hotspoot
@@ -1428,9 +1451,12 @@ void spp_client_main(void) {
 				break;
 			case HANDLE_BEEP_TIMER:
 				beep_count--;
-				beep(880<<1);
+				beep(beep_period);
 				if (beep_count == 0) {
 			        gecko_cmd_hardware_set_soft_timer(0, HANDLE_BEEP_TIMER, true);
+			        if (pre_beep_state != PLAY_BEEP) {
+						_main_state = pre_beep_state;
+			        }
 				}
 			default:
 				break;
