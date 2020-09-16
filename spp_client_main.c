@@ -847,6 +847,9 @@ void check_time (char *msg) {
 //	        		enable_master, enable_slave);
 			update_next_minute();
 			printLog("%lu: next_minute %lu\r\n",ts_ms(), _time_info.next_minute);
+			// printLog("Try reset\r\n");
+			// NVIC_SystemReset();
+			// gecko_cmd_system_reset(0);
 			// play_beep(1, 880<<1, false);
 		} else {
 			_update_minute_after_upload = true;
@@ -908,7 +911,7 @@ void spp_client_main(void) {
 			  uint32_t flash_size = storage_size();
 			  printLog("storage_init: %ld %ld\r\n", flash_ret, flash_size);
 			  determine_counts(flash_size);
-			  read_encounters_tracking();
+			  // read_encounters_tracking();
 			  find_mark_in_flash(4);
 			  printLog("_encounters_tracker.start_upload: %lu\r\n",
 					  _encounters_tracker.start_upload);
@@ -927,7 +930,7 @@ void spp_client_main(void) {
 			// Server_slave mode
 			setup_adv();
 			set_new_mac_address();
-
+			printLog("%lu: Finished system_boot_id\r\n", ts_ms());
 			gecko_cmd_hardware_set_soft_timer(32768<<2, HEARTBEAT_TIMER, false);
 
 			break;
