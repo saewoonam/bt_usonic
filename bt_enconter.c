@@ -88,6 +88,45 @@ struct {
 
 };
 
+struct {
+	uint8_t flagsLen; /* Length of the Flags field. */
+	uint8_t flagsType; /* Type of the Flags field. */
+	uint8_t flags; /* Flags field. */
+	uint8_t uuid16Len; /* Length of the Manufacturer Data field. */
+	uint8_t uuid16Type;
+	uint8_t uuid16Data[2]; /* Type of the Manufacturer Data field. */
+	uint8_t uuid128Len; /* Length of the Manufacturer Data field. */
+	uint8_t uuid128Type;
+	uint8_t uuid128Data[16]; /* Type of the Manufacturer Data field. */
+	uint8_t nameLen;
+	uint8_t nameType;
+	uint8_t name[4];
+} etAdvData2 = {
+/* Flag bits - See Bluetooth 4.0 Core Specification , Volume 3, Appendix C, 18.1 for more details on flags. */
+2, /* length  */
+0x01, /* type */
+0x04 | 0x02, /* Flags: LE General Discoverable Mode, BR/EDR is disabled. */
+
+/* Manufacturer specific data */
+3, /* length of field*/
+0x02, /* type */
+//{ 0x6F, 0xFD },
+//{ 0x19, 0xC0 },
+{ 0x6F, 0xFD },
+
+0x11, /* Length of service data */
+0x06, /* Type */
+/* 128 bit / 16 byte UUID */
+{ 0x05, 0x81, 0x7E, 0xA0, 0xEE, 0x7A, 0x27, 0xA9,
+		0x3E, 0x44, 0x68, 0x91, 0x24, 0x32, 0x18, 0x7B },
+
+0x05,
+0x09,
+{'t', 'e', 's', 't'}
+
+};
+
+
 #define HANDLE_ADV	0
 
 void get_local_mac(void) {
@@ -136,8 +175,8 @@ void print_mac(uint8_t *addr) {
 
 
 void setup_adv(void) {
-	uint8_t len = sizeof(etAdvData);
-	uint8_t *pData = (uint8_t*) (&etAdvData);
+	uint8_t len = sizeof(etAdvData2);
+	uint8_t *pData = (uint8_t*) (&etAdvData2);
 //	/* Set custom advertising data */
 	uint16_t res = gecko_cmd_le_gap_bt5_set_adv_data(HANDLE_ADV, 0, len, pData)->result;
 	printLog("Set adv data %u\r\n", res);
