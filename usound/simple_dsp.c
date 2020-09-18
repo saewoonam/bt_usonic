@@ -6,6 +6,8 @@
 // #include "stdio.h"
 #include "stdlib.h"
 
+extern float pulse_width;
+
 
 void calculate_periods_list(int start, int stop, float pw, uint16_t *list, int *N) {
 	int timerFreq = CMU_ClockFreqGet(cmuClock_TIMER0) / (0 + 1);
@@ -23,7 +25,7 @@ void calculate_period_k(int k, float pw, int buffer_size, uint16_t *list, int *N
 	*N = (int) (timerFreq / top_start * pw);
 	//  period is given by top+1
 	// https://www.silabs.com/documents/public/application-notes/AN0014.pdf
-	list[0] = top_start-1;
+	list[0] = top_start; //-1;
 	//	for (int i=0; i<*N; i++) {
 //		list[i] = top_start;
 //	}
@@ -336,28 +338,29 @@ void shape_v2(int16_t* x, int16_t *max, int *max_idx) {
 			// printLog("search %d %d\r\n", *max, *max_idx);
 		}
 	}
-	// printLog("max, max_idx: %d %d\r\n", *max, *max_idx);
+	printLog("max, max_idx: %d %d\r\n", *max, *max_idx);
 	// check for max close in time
 	if (*max_idx>300) {
 		// printLog("Look for second peak sooner than %d\r\n", *max_idx);
 		int16_t max2 = 0;
 		int idx2 = 0;
 		int pk2_idx = 0;
-
-		find_max(x, *max_idx-100, &max2, &idx2);
+		int offset = pulse_width*1000*100;
+		printLog("offset: %d\r\n", offset);
+		find_max(x, *max_idx-offset, &max2, &idx2);
 		int w = width(x, idx2, 0.5, &pk2_idx); // do we need this?
 		int thresh = *max * 0.2;
 		// printLog("thresh: %d\r\n", thresh);
 		if (thresh < 30) thresh = 30;
 
-		if (max2>thresh) {
+		if ((max2>thresh) && (idx2+offset+1 < *max_idx)) {
 			// replace with earlier peak
 			*max_idx = idx2;
 			*max = max2;
 		} else {
 			;
 		}
-		// printLog("peak2 idx: %d, max value: %d, width: %d pk2_idx:%d\r\n", idx2, max2, w, pk2_idx);
+		printLog("peak2 idx: %d, max value: %d, width: %d pk2_idx:%d\r\n", idx2, max2, w, pk2_idx);
 	}
 }
 
@@ -385,4 +388,32 @@ int IQR(int16_t* a, int n, int *m)
     int Q3 = a[median(a, mid_index + 1, n)];
     // IQR calculation
     return (Q3 - Q1);
+}
+
+
+uint64_t code_lsfr(int seed, int polynomial, int length, int *N, uint16_t *pw, int8_t *chirp ) {
+    int lsb;
+    unsigned int data = seed;
+    uint64_t compact = 0;
+    for (int i=0; i<8; i++) {
+        // printf("i=%d, %d\n", i, polynomial & (1<<i));
+        if (polynomial & (1<<i)) *N = i+1;
+    }
+    *N = (1<<*N) - 1;
+    // printf("N: %d\r\n", *N);
+    for (int i=0; i<*N; i++) {
+        lsb = data & 1;
+        pw[i] = length*192*lsb;
+        for (int j=0; j<length; j++) {
+            chirp[i*length + j] = 2*lsb-1;
+        }
+        data = data >> 1;
+        compact <<= 1;
+        if (lsb>0) {
+            data = data ^ polynomial;
+            compact += 1;
+        }
+    }
+    // return 1;
+    return compact;
 }
