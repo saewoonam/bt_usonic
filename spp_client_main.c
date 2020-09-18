@@ -126,7 +126,10 @@ int _data_idx = 0;
 void pdm_start(void);
 void pdm_pause(void);
 
+void set_k_goertzel();
+
 void populateBuffers(int k_value);
+void populateBuffers_gold(int k_value);
 void startDMADRV_TMR(void);
 // void stopDMADRV_TMR(void);
 
@@ -202,6 +205,7 @@ bool mark_set = false;
 // mic and spkr related
 bool update_k_goertzel=true;
 bool update_k_speaker=true;
+bool use_waves = true;
 
 // bt connection
 uint8 _conn_handle = 0xFF;
@@ -768,6 +772,10 @@ void parse_command(uint8_t c) {
 		out = 2;
 		break;
 
+	case '3':
+		out = 3;
+		break;
+
 	default:
 		printLog("Got %c, %d\r\n", c, c);
 		break;
@@ -1279,6 +1287,7 @@ void spp_client_main(void) {
 				sharedCount = 0;
 				// immediately try to update k_goertzel
 				update_k_goertzel = true;
+				set_k_goertzel();
 				send_spp_data_client();
 				break;
 			default:
@@ -1486,6 +1495,11 @@ void spp_client_main(void) {
 						} else {
 							k_speaker = k_calibrate;
 						}
+						if (use_waves) {
+							populateBuffers(k_speaker);  // added 9/15 not sure why this isn't here.
+						} else {
+							populateBuffers_gold(k_speaker);
+						}
 						// linkPRS();
 						// pdm_start();
 						// pdm_on = true;
@@ -1548,7 +1562,11 @@ void spp_client_main(void) {
 						} else {
 							k_speaker = k_calibrate;
 						}
-						populateBuffers(k_speaker);
+						if (use_waves) {
+							populateBuffers(k_speaker);  // added 9/15 not sure why this isn't here.
+						} else {
+							populateBuffers_gold(k_speaker);
+						}
 						// printLog("Update index: %d k_speaker: %ld\r\n", sharedCount>>1, k_speaker);
 					}
 				// } else if (_client_type == CLIENT_IS_COMPUTER) {
