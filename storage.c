@@ -193,12 +193,28 @@ void write_encounters_tracking(void) {
     printLog("write_encounters_tracking result 0x%04X\r\n", result);
 }
 
+extern struct {
+	uint8_t flagsLen; /* Length of the Flags field. */
+	uint8_t flagsType; /* Type of the Flags field. */
+	uint8_t flags; /* Flags field. */
+	uint8_t uuid16Len; /* Length of the Manufacturer Data field. */
+	uint8_t uuid16Type;
+	uint8_t uuid16Data[2]; /* Type of the Manufacturer Data field. */
+	uint8_t uuid128Len; /* Length of the Manufacturer Data field. */
+	uint8_t uuid128Type;
+	uint8_t uuid128Data[16]; /* Type of the Manufacturer Data field. */
+	uint8_t nameLen;
+	uint8_t nameType;
+	uint8_t name[4];
+} etAdvData2;
+
 void read_name_ps(void) {
 	uint16 k = 0x4000;
 	uint8_t *name;
 	struct gecko_msg_flash_ps_load_rsp_t *result;
     result = gecko_cmd_flash_ps_load(k);
-    // printLog("read_name_ps 0x%04X\r\n", result->result);
+    printLog("read_name_ps 0x%04X\r\n", result->result);
+
     if (result->result==0) {
     	if (result->value.len==8) {
     		name = result->value.data;
@@ -208,6 +224,8 @@ void read_name_ps(void) {
     			printLog("%c", name[i]);
     		}
     		printLog("\r\n");
+    		// Update advData2
+    		memcpy(etAdvData2.name, name+4, 4);
     	} else { printLog("Problem reading BT name\r\n"); }
     }
 }
