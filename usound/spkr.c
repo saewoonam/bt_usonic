@@ -23,6 +23,7 @@
 #include "buffer_size_define.h"
 #define TAPER
 extern float pulse_width;
+extern int8_t pdm_template[512];
 
 #define C4
 
@@ -75,6 +76,14 @@ void populateBuffers(int k_value) {
 		}
 	}
 #endif
+}
+
+void populateBuffers_gold(int k_value) {
+	int code_length;
+	// polynomial 51 or 33
+	code_lsfr((k_value%32)+1, 51, 1, &code_length, list_pwm, pdm_template);
+	numWaves = code_length;
+	printLog("Finished populateBuffers_gold, numWave:%d\r\n", numWaves);
 }
 //bool dma_tmr_topv_cb(unsigned int channel, unsigned int sequenceNo,
 //		void *userParam) {
