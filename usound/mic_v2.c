@@ -21,7 +21,7 @@ extern bool update_k_goertzel;
 extern uint8_t sharedCount;
 extern uint8_t k_goertzel_offsets[12];
 extern int32_t k_calibrate;
-
+extern bool use_waves;
 #define PDM_INTERRUPTS
 #define GOERTZEL
 #define K_OFFSET	268
@@ -169,6 +169,15 @@ void insert(int item, int16_t arr[]) {
 	}
 }
 
+void set_k_goertzel() {
+	if (k_calibrate <= 256) {
+		k_goertzel =
+				k_goertzel_offsets[sharedCount >> 1] + K_OFFSET;
+	} else {
+		k_goertzel = k_calibrate;
+	}
+	// k_goertzel =  k_goertzel_offsets[2] + K_OFFSET;
+}
 
 bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) {
 	// printf("pdm_ldma_cb\r\n");
@@ -207,20 +216,38 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 			DMADRV_StopTransfer(channel);
 			recording = false;
 
+			// Update the k_goertzel
+			if (update_k_goertzel) {
+				set_k_goertzel();
+				update_k_goertzel = false;
+				printLog("Update k_goertzel, sc: %d k_goertzel %ld\r\n",
+						sharedCount, k_goertzel);
+			}
+
 #ifdef GOERTZEL
-			// uint32_t t0 = RTCC_CounterGet();
+			uint32_t t0 = RTCC_CounterGet();
 			float P_left = goertzel(left, k_goertzel);
 			float P_right =  goertzel(right, k_goertzel);
 			uint32_t curr;
-//			uint32_t curr = RTCC_CounterGet();
-//			printf("%ld, %ld, %ld, %d ----:g[%ld]: %e, %e\r\n", curr, curr-prev_rtcc, curr-t0, sequenceNo,
-//					k_goertzel, P_left, P_right);
-//			prev_rtcc = curr;
+			curr = RTCC_CounterGet();
+			printf("%ld, %ld, %ld, %d ----:g[%ld]: %e, %e\r\n", curr, curr-prev_rtcc, curr-t0, sequenceNo,
+					k_goertzel, P_left, P_right);
+			prev_rtcc = curr;
+			// look at raw... later, we can look at ac-coupled
+//			if (out == 1)
+//				dump_array((uint8_t *) left, BUFFER_SIZE << 1);
+//			if (out == 1)
+//				dump_array((uint8_t *) right, BUFFER_SIZE << 1);
 			if ((P_left > 2e3) || (P_right > 2e3) || _compute_all) {
-
-				calc_chirp_v2(k_goertzel, pulse_width, pdm_template,
-						&N_pdm_template);
-
+				if (use_waves) {  // square wave audio bursts
+					calc_chirp_v2(k_goertzel, pulse_width, pdm_template,
+							&N_pdm_template);
+				} else {  // gold code audio bursts
+					extern uint16_t list_pwm[512];
+					code_lsfr((k_goertzel % 32) + 1, 51, 1, &N_pdm_template,
+							list_pwm, pdm_template);
+					N_pdm_template *= 1;
+				}
 				curr = RTCC_CounterGet();
 //				printf("%ld, %ld, %ld, **** calc_chirp\r\n",
 //						curr, curr-prev_rtcc, curr-t0);
@@ -233,6 +260,8 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 				memset(corr, 0, BUFFER_SIZE << 1);
 				calc_cross(left, BUFFER_SIZE, pdm_template, N_pdm_template,
 						corr);
+				if (out == 3)
+					dump_array((uint8_t *) corr, BUFFER_SIZE << 1);
 //				curr = RTCC_CounterGet();
 //				printf("%ld, %ld, %ld, **** calc_cross\r\n",
 //						curr, curr-prev_rtcc, curr-t0);
@@ -257,6 +286,8 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 				calc_cross(right, BUFFER_SIZE, pdm_template, N_pdm_template,
 						corr);
 				// int r_t = shape(corr);
+				if (out == 3)
+					dump_array((uint8_t *) corr, BUFFER_SIZE << 1);
 				shape_v2(corr, &r_pk, &r_t);
 				// int right_w = width(corr, r_t, 0.5, &p2_r);
 				if (out == 2)
@@ -302,19 +333,13 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 				prev_rtcc = curr;
 			}
 #endif
-			// Update the k_goertzel
-			if (update_k_goertzel) {
+//			// Update the k_goertzel
+//			if (update_k_goertzel) {
+//				set_k_goertzel();
+//				update_k_goertzel = false;
 //				printLog("Update k_goertzel, sc: %d k_goertzel %ld\r\n",
 //						sharedCount, k_goertzel);
-				// reset update
-				if (k_calibrate<=256) {
-				k_goertzel = k_goertzel_offsets[sharedCount >> 1] + K_OFFSET;
-				} else {
-					k_goertzel = k_calibrate;
-				}
-				// k_goertzel =  k_goertzel_offsets[2] + K_OFFSET;
-				update_k_goertzel = false;
-			}
+//			}
 
 		}
 	}
