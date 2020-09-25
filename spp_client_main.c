@@ -147,7 +147,7 @@ void flash_erase();
 void determine_counts(uint32_t flash_size);
 void read_name_ps(void);
 void set_name(uint8_t *name);
-void read_encounters_tracking(void);
+// void read_encounters_tracking(void);
 
 void readBatteryLevel(void);
 
@@ -1569,11 +1569,32 @@ void spp_client_main(void) {
 						}
 						// printLog("Update index: %d k_speaker: %ld\r\n", sharedCount>>1, k_speaker);
 					}
-				// } else if (_client_type == CLIENT_IS_COMPUTER) {
-				} else  {
+					// } else if (_client_type == CLIENT_IS_COMPUTER) {
+				} else {
 					process_server_spp_from_computer(evt, sending_ota, false);
-
 				}
+			} else if (evt->data.evt_gatt_server_attribute_value.attribute
+					== gattdb_data_in) {
+				if (sending_ota) {
+					uint32_t *index;
+					int len =
+							evt->data.evt_gatt_server_attribute_value.value.len;
+					if (len == 4) {
+						index =
+								(uint32_t *) evt->data.evt_gatt_server_attribute_value.value.data;
+						// printLog("Got request for packet, len %d, idx: %ld\r\n", evt->data.evt_gatt_server_attribute_value.value.len, *index);
+						send_chunk(*index);
+					} else {
+						printLog("Recevied the wrong number of bytes: %d/4\r\n",
+								len);
+					}
+				} else {
+					char *msg;
+					msg =
+							(char *) evt->data.evt_gatt_server_attribute_value.value.data;
+					printLog("gatt_data_in new message: %s\r\n", msg);
+				}
+				printLog("gatt data_in\r\n");
 			}
 		}
 			break;
