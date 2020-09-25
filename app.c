@@ -157,11 +157,11 @@ void TIMER1_IRQHandler(void) {
 	// Acknowledge the interrupt
 	uint32_t flags = TIMER_IntGet(TIMER1);
 	TIMER_IntClear(TIMER1, flags);
-	static uint32_t prev = 0;
+	// static uint32_t prev = 0;
 		timer1_RTCC = RTCC_CounterGet();
 		// printLog("%lu, %4lu,  %4lu:TX\r\n", timer1_RTCC, timer1_RTCC - prev_rtcc, timer1_RTCC-prev);
 		prev_rtcc = timer1_RTCC;
-		prev = prev_rtcc;
+		// prev = prev_rtcc;
 }
 
 static void initTimers() {
