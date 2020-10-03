@@ -109,7 +109,7 @@ struct {
 
 /* Manufacturer specific data */
 3, /* length of field*/
-0x02, /* type */
+0x03, /* type */
 //{ 0x6F, 0xFD },
 //{ 0x19, 0xC0 },
 { 0x6F, 0xFD },
@@ -338,11 +338,11 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 	int ad_type;
 
 	// printLog("Process scan ");
-	// print_mac(pResp->address.addr);
-	if (pResp->rssi <-90) {
+//	printLog("%lu: process_scan rssi: %d ", ts_ms(),  pResp->rssi);
+//	print_mac(pResp->address.addr);
+	if (pResp->rssi <-85) {
 		return 0;
 	}
-	// printLog("%lu: process_scan rssi: %d\r\n", ts_ms(),  pResp->rssi);
 	while (i < (pResp->data.len - 1)) {
 
 		ad_len = pResp->data.data[i];
@@ -392,7 +392,7 @@ int process_scan_response(struct gecko_msg_le_gap_scan_response_evt_t *pResp,
 //				printLog("found C019 uuid, count: %d, start: %d\r\n",
 //						encounter_count, _encounters_tracker.start_upload);
 				// bluetooth hotspot nearby so stop writing.
-				_time_info.near_hotspot_time = ts_ms();
+				_time_info.near_hotspot_time = ts_ms();  // TODO: Should we move this to spp_client_main?
 				// check if there is new data
 				// if (_encounters_tracker.start_upload < encounter_count) {
 					//printLog("tracker: %lu, count %lu\r\n", _encounters_tracker.start_upload, encounter_count);
@@ -632,7 +632,7 @@ void process_server_spp_from_computer(struct gecko_cmd_packet* evt,
 			if (len == 4) {
 				index =
 						(uint32_t *) evt->data.evt_gatt_server_attribute_value.value.data;
-				// printLog("Got request for data, len %d, idx: %ld\r\n", evt->data.evt_gatt_server_attribute_value.value.len, *index);
+				printLog("Got request for data, len %d, idx: %ld\r\n", evt->data.evt_gatt_server_attribute_value.value.len, *index);
 				send_chunk(*index);
 			} else {
 				printLog("Recevied the wrong number of bytes: %d/4\r\n", len);
