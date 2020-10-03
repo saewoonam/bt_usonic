@@ -1473,8 +1473,9 @@ void spp_client_main(void) {
 			}
 
 			readBatteryLevel();
-			if ( (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD)) &&
-					(_client_type == CLIENT_IS_BTDEV) ) {
+//			if ( (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD)) &&
+//					(_client_type == CLIENT_IS_BTDEV) ) {
+			if (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD))  {
 				_near_hotspot = false;
 				if (!write_flash) {
 					printLog("%lu: Not near hotspot, start writing %lu\r\n", ts_ms(), _time_info.near_hotspot_time);
