@@ -76,7 +76,7 @@
 #define K_OFFSET	268
 #define K_OFFSET2	428
 
-#define SEND_ID		(false)
+#define SEND_ID		(true)
 
 const char *version_str = "Version: " __DATE__ " " __TIME__;
 const char *ota_version = "2.0";
