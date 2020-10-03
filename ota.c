@@ -194,3 +194,25 @@ void send_data_turbo(uint32_t start_idx, uint32_t number_of_packets)
 		printLog("number of bad memory reads in xfer: %d\r\n", bad);
 	}
 }
+
+
+#include "encounter/encounter.h"
+
+extern Encounter_record_v2 encounters[IDX_MASK+1];
+void send_encounter(uint32_t index) {
+	uint8 data[68];
+	memcpy(data, &index, 4);
+	memcpy(data+4, encounters+ (index & IDX_MASK), 32);
+	uint16 result;
+	do {
+		result = gecko_cmd_gatt_server_send_characteristic_notification(
+				_conn_handle, gattdb_gatt_spp_data, 36, data)->result;
+	} while (result == bg_err_out_of_memory);
+		/*
+		 *
+		for(int i=0; i<xfer_len; i++) {
+			printLog("%02X ", *(data+4+i));
+		}
+		printLog("\r\n");
+		*/
+}
