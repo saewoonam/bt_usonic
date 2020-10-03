@@ -53,6 +53,7 @@ int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute) {
      * Search backward during the "last minutes" worth of encounters
      *
      */
+	// TODO deal with rollover of c_fifo_last_idx
     Encounter_record_v2 *current_encounter;
     if (c_fifo_last_idx == 0) return -1;
     int start = c_fifo_last_idx - 1;
@@ -61,6 +62,28 @@ int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute) {
         if (current_encounter->minute < epoch_minute) return -1;
         if (memcmp(current_encounter->mac, mac, 6) == 0) return start;
         start--;
+    } while (start>=0);
+    return -1;
+}
+
+int search_encounters_em(uint32_t epoch_minute) {
+    /*
+     *
+     * Search backward for encounters for events with epoch_minute
+     *
+     */
+	// TODO deal with rollover of c_fifo_last_idx
+    Encounter_record_v2 *current_encounter;
+    if (c_fifo_last_idx == 0) return -1;
+    int start = c_fifo_last_idx - 1;
+    int count=0;
+    do {
+        current_encounter = encounters + (start & IDX_MASK);
+        if (current_encounter->minute < epoch_minute) return (start+1);
+        if (start==0) return 0;
+        start--;
+        count++;
+        if (count==IDX_MASK) return start;
     } while (start>=0);
     return -1;
 }
