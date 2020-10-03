@@ -58,6 +58,7 @@
 #define FINISHED_UPLOAD 	13
 #define TIME_SYNC	 	14
 #define PLAY_BEEP		15
+#define ID_UPLOAD		16
 #define ROLE_UNKNOWN 		-1
 #define ROLE_CLIENT_MASTER 	0
 #define ROLE_SERVER_SLAVE 	1
@@ -74,6 +75,8 @@
 
 #define K_OFFSET	268
 #define K_OFFSET2	428
+
+#define SEND_ID		(false)
 
 const char *version_str = "Version: " __DATE__ " " __TIME__;
 const char *ota_version = "2.0";
@@ -138,6 +141,9 @@ void set_new_mac_address(void);
 void print_mac(uint8_t *addr);
 
 void setup_encounter_record(uint8_t* mac_addr);
+int search_encounters_em(uint32_t epoch_minute);
+void send_encounter(uint32_t index);
+
 void process_ext_signals(uint32_t signals);
 void process_server_spp_from_computer(struct gecko_cmd_packet* evt, bool sending_ota, bool sending_turbo);
 
@@ -213,7 +219,7 @@ uint8 _max_packet_size = 20;
 uint8 _min_packet_size = 20;  // Target minimum bytes for one packet
 uint8_t local_mac[6];
 // enable bt for encounters
-bool enable_slave = true;
+bool enable_slave = true;  // disable listening for usound until time is set
 bool enable_master = true;
 
 uint8_t battBatteryLevel = 0;
@@ -246,6 +252,7 @@ uint8_t local_mac[6];
 volatile int conn_interval = 64; //64
 Encounter_record_v2 *current_encounter = encounters;
 static int8  _rssi_count = 0;
+static int8 search_history = 10;
 
 static int bad_heartbeats = 0;
 static int8 _client_type = -1;
@@ -253,8 +260,17 @@ static bool sending_ota = false;
 static int beep_count = 0;
 static uint16_t beep_period = 880;
 
+// _status
+// bit 0:  save to flash
+// bit 1:  mark
+// bit 2:  no clock
+// bit 3:  RAW mode (not used in this firmware)
 uint8 _status = 1<<2;  // start with clock not set bit
+
 static bool _update_minute_after_upload = false;
+static bool need_to_send_id = SEND_ID;
+static bool _near_hotspot = false;
+
 static void reset_variables() {
 	_conn_handle = 0xFF;
 	_main_state = DISCONNECTED;
@@ -275,6 +291,7 @@ static void reset_variables() {
 	_rssi_count = 0;
 	sharedCount = 0;
 	bad_heartbeats = 0;  // not sure this is the best thing,  doesn't handle 2 connections right
+	need_to_send_id = SEND_ID;
 }
 
 void get_local_mac(void);
@@ -359,6 +376,22 @@ static void send_spp_data_client() {
 
 }
 
+static void send_upload_id() {
+	uint16 result;
+	uint8_t temp[68];
+
+	//	if (SEND_ID) {
+		memset(temp, 0xFF, 4);
+	    memset(temp+4, 5, 32);
+	    memset(temp+32+4, 0, 32 );
+	    memcpy(temp+32+4, gecko_cmd_gatt_server_read_attribute_value(gattdb_device_name, 0)->value.data, 8);
+		do {
+			result = gecko_cmd_gatt_write_characteristic_value(_conn_handle,
+					_char_upload_handle, 64+4, temp)->result;
+		} while (result == bg_err_out_of_memory);
+//	}
+}
+
 static void send_upload_data() {
 	uint16 result;
 	// int len = 192;
@@ -399,7 +432,6 @@ static void send_upload_data() {
 		if (_encounters_tracker.start_upload==encounter_count) {
 			// mark flash
 			printLog("%lu: before mark tracker: %lu, count %lu\r\n",ts_ms(), _encounters_tracker.start_upload, encounter_count);
-
 			store_special_mark(4);
 			printLog("%lu: after mark tracker: %lu, count %lu\r\n",ts_ms(),  _encounters_tracker.start_upload, encounter_count);
 			_encounters_tracker.start_upload = encounter_count;
@@ -532,6 +564,15 @@ void parse_bt_command(uint8_t c) {
 		printLog("send mtu\r\n");
 		send_ota_uint8(_min_packet_size);
         break;
+	}
+	case 'e': { // fetch data from encounters... search_history minutes
+		uint32_t epoch_minute = em(ts_ms());
+		int index = search_encounters_em(epoch_minute-search_history);
+		while (index >= 0) {
+			printLog("encounter history index: %d\r\n", index);
+			send_encounter(index);
+		}
+		break;
 	}
  	case 'E':{
 		// mode = MODE_ENCOUNTER;
@@ -685,6 +726,11 @@ void parse_bt_command(uint8_t c) {
     }
 	case '0':
 		_client_type = CLIENT_IS_BTDEV;
+		if ((_status & (1 << 2))||_near_hotspot) {  // close connection if time is not set.
+			gecko_cmd_le_connection_close(_conn_handle);
+//		} else {
+//			_client_type = CLIENT_IS_BTDEV;
+		}
 		// printLog("set client type %d\r\n", _client_type);
 		break;
 
@@ -937,7 +983,7 @@ void spp_client_main(void) {
 			_main_state = SCAN_ADV;
 			// Server_slave mode
 			setup_adv();
-			set_new_mac_address();
+			set_new_mac_address();  // this starts bluetooth
 			printLog("%lu: Finished system_boot_id\r\n", ts_ms());
 			gecko_cmd_hardware_set_soft_timer(32768<<2, HEARTBEAT_TIMER, false);
 
@@ -959,10 +1005,11 @@ void spp_client_main(void) {
 					disable_encounter = false;
 					break;
 				}
-				// printLog("%lu: response %d\r\n", ts_ms(), response);
+				if (response > 0) printLog("%lu: response %d\r\n", ts_ms(), response);
 				if (response>0) {
 					struct gecko_msg_le_gap_connect_rsp_t *pResp;
 					if (response==2) {
+						_near_hotspot = true;
 						// printLog("%lu: upload? _status: %d\r\n", ts_ms(), _status);
 						if ((_encounters_tracker.start_upload == encounter_count) &&
 								!(_status & (1 << 2)) ){
@@ -1004,6 +1051,12 @@ void spp_client_main(void) {
 							break;
 							//return 0;
 						}
+						if (_near_hotspot) {
+							// don't connect if clock  is not set
+							_role = ROLE_UNKNOWN;
+							break;
+							//return 0;
+						}
 						// in encounter mode, check if data collected already
 						int idx = in_encounters_fifo(p_scan_response->address.addr,
 								epoch_minute);
@@ -1027,7 +1080,7 @@ void spp_client_main(void) {
 
 					}
 
-					// printLog("Try to connect\r\n");
+					printLog("Try to connect\r\n");
 					// Match found -> stop discovery and try to connect
 					gecko_cmd_le_gap_end_procedure();
 			        gecko_cmd_le_gap_stop_advertising(0); // Need HANDLE_ADV
@@ -1111,7 +1164,7 @@ void spp_client_main(void) {
 	        // printLog("open connection type: %d mac: ", evt->data.evt_le_connection_opened.address_type);
 	        // print_mac(evt->data.evt_le_connection_opened.address.addr);
 	        setup_encounter_record(evt->data.evt_le_connection_opened.address.addr);
-	        if (conn_interval == 64) {
+	        if (conn_interval <= 64) {
 		        gecko_cmd_hardware_set_soft_timer(5 * 32768, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
 
 	        } else {
@@ -1148,7 +1201,7 @@ void spp_client_main(void) {
 					c_fifo_last_idx++; // this actually saves the data in the fifo
 				} else {
 					printLog("__________sharedCount = 0\r\n");
-					play_beep(1, 880, false);
+					// play_beep(1, 880, false);
 				}
 			}
             if  ((_role==ROLE_SERVER_SLAVE) && (_client_type!=0)) {
@@ -1219,6 +1272,7 @@ void spp_client_main(void) {
 						gecko_cmd_gatt_discover_characteristics(_conn_handle,
 								_service_handle);
 						if (_status & (1<<2)) {
+							printLog("set _main_state: TIME_SYNC\r\n");
 							_main_state = TIME_SYNC;
 						} else {
 							_main_state = FIND_UPLOAD;
@@ -1231,14 +1285,22 @@ void spp_client_main(void) {
 				}
 				break;
 			case TIME_SYNC:
-		    	gecko_cmd_gatt_read_characteristic_value(_conn_handle, _char_time_handle);
+				printLog("Try to read time_sync\r\n");
+		    	uint16_t res = gecko_cmd_gatt_read_characteristic_value(_conn_handle, _char_time_handle)->result;
+				printLog("Finish gatt cal to read time_sync:%u\r\n", res);
 				_main_state = FIND_UPLOAD;
 				break;
+			//case ID_UPLOAD:
 			case FIND_UPLOAD:
 				if (_char_upload_handle > 0) {
 					if (_encounters_tracker.start_upload<encounter_count) {
 						// printLog("Try to send upload data\r\n");
-						send_upload_data();
+						if (need_to_send_id) {
+							send_upload_id();
+							need_to_send_id = false;
+						} else {
+							send_upload_data();
+						}
 					} else {
 						printLog("Skip upload\r\n");
 						_main_state = FINISHED_UPLOAD;
@@ -1252,6 +1314,7 @@ void spp_client_main(void) {
 				}
 				break;
 			case FINISHED_UPLOAD:
+				printLog("FINISHED UPLOAD\r\n");
 				gecko_cmd_le_connection_close(_conn_handle);
 				break;
 
@@ -1383,6 +1446,7 @@ void spp_client_main(void) {
 
 				sync_clock(ts, timeinfo);
 				_status &= ~(1<<2); // clear clock not set bit
+				enable_slave = true;
 				update_counts_status();
 
 				_main_state = FIND_UPLOAD;
@@ -1411,6 +1475,7 @@ void spp_client_main(void) {
 			readBatteryLevel();
 			if ( (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD)) &&
 					(_client_type == CLIENT_IS_BTDEV) ) {
+				_near_hotspot = false;
 				if (!write_flash) {
 					printLog("%lu: Not near hotspot, start writing %lu\r\n", ts_ms(), _time_info.near_hotspot_time);
 					write_flash = true;
@@ -1456,6 +1521,7 @@ void spp_client_main(void) {
 					}
 				}
 				if (bad_heartbeats==3) {
+					printLog("Bad heartbeats 3\r\n");
 					gecko_cmd_le_connection_close(_conn_handle);
 					bad_heartbeats=0;
 					reset_needed = false;
@@ -1487,8 +1553,8 @@ void spp_client_main(void) {
 				        gecko_cmd_hardware_set_soft_timer(0, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
 						_main_state = STATE_SPP_MODE;
 						SLEEP_SleepBlockBegin(sleepEM2); // Disable sleeping
-						// printLog("SPP Mode ON\r\n");
-						// printLog("Client Type: %d\r\n", _client_type);
+						printLog("SPP Mode ON\r\n");
+						printLog("Client Type: %d\r\n", _client_type);
 						if (_client_type == CLIENT_IS_BTDEV) linkPRS();
 						if (k_calibrate <=256 ) {
 							k_speaker = k_speaker_offsets[0] + K_OFFSET;
@@ -1520,7 +1586,7 @@ void spp_client_main(void) {
 			if (v->attribute == gattdb_Read_Write) {
 				int c = v->value.data[0];
 		        gecko_cmd_hardware_set_soft_timer(0, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
-				// printLog("new rw value %c\r\n", c);
+				printLog("new rw value %c\r\n", c);
 				parse_bt_command(c);
 			} else if (v->attribute == gattdb_gatt_spp_data) {
 				if (_client_type == CLIENT_IS_BTDEV) {
