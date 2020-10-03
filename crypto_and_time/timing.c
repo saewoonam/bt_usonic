@@ -108,7 +108,7 @@ void sync_clock(uint32_t ts, uint32_t *timedata) {
 	_time_info.epochtimesync = timedata[0]; // units are sec
 	_time_info.offset_time = timedata[1];  // units are ms
 	_time_info.offset_overflow = timedata[2];  // units are integers
-
+	//printLog("timedata: %ld, %ld, %ld\r\n", timedata[0], timedata[1], timedata[2]);
 	uint32_t epoch_minute_origin = (_time_info.epochtimesync) / 60;
 	uint32_t extra_seconds = _time_info.epochtimesync % 60;
 	_time_info.next_minute = _time_info.offset_time - extra_seconds * 1000
