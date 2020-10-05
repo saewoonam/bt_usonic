@@ -568,10 +568,12 @@ void parse_bt_command(uint8_t c) {
 	case 'e': { // fetch data from encounters... search_history minutes
 		uint32_t epoch_minute = em(ts_ms());
 		int index = search_encounters_em(epoch_minute-search_history);
-		while (index >= 0) {
-			printLog("encounter history index: %d\r\n", index);
-			send_encounter(index);
+		printLog("c_fifo_last_idx: %lu index:%d\r\n", c_fifo_last_idx, index);
+		for (int i = c_fifo_last_idx-1; i>=index; i--) {
+			printLog("send encounter history index: %d\r\n", i);
+			send_encounter(i);
 		}
+		send_encounter(0xFFFFFFFF);
 		break;
 	}
  	case 'E':{
@@ -1477,7 +1479,7 @@ void spp_client_main(void) {
 //					(_client_type == CLIENT_IS_BTDEV) ) {
 			if (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD))  {
 				_near_hotspot = false;
-				if (!write_flash) {
+				if ((!write_flash) && !(_status & (1 << 2))) {
 					printLog("%lu: Not near hotspot, start writing %lu\r\n", ts_ms(), _time_info.near_hotspot_time);
 					write_flash = true;
 					_status |= 0x01;

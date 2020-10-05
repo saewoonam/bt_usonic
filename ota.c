@@ -202,7 +202,11 @@ extern Encounter_record_v2 encounters[IDX_MASK+1];
 void send_encounter(uint32_t index) {
 	uint8 data[68];
 	memcpy(data, &index, 4);
-	memcpy(data+4, encounters+ (index & IDX_MASK), 32);
+	if (index < 0xFFFFFFF) {  // 0xFFFFFFFF is not a great marker.. TODO need to fix this
+		memcpy(data + 4, encounters + (index & IDX_MASK), 32);
+	} else {
+		memset(data + 4, 0, 32); // send end of data marker
+	}
 	uint16 result;
 	do {
 		result = gecko_cmd_gatt_server_send_characteristic_notification(
