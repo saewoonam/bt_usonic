@@ -5,6 +5,7 @@
 - 'g': get flash memory address with oldest data NOT uploaded to the server.
 - 'G': set device so that the 'f' transfers data not uploaded to the server.
 - 'Z': set the device so that the 'f' transfers all the data (start from flash memory address 0)
+- 'Y': mark in the flash memory that all the data was uploaded to the server
 - 't': put device in mode to transfer data faster... does not work
 - 'T': take device out of mode 't' above.  
 - 'u': retrieve mtu packet size, read result from SPP_data characteristic
