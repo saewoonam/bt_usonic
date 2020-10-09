@@ -29,6 +29,9 @@ extern uint8_t k_speaker_offsets[12];
 
 extern bool enable_slave;
 extern bool enable_master;
+
+extern uint32_t chunk_offset;
+
 // void update_public_key(void);
 int in_encounters_fifo(const uint8_t * mac, uint32_t epoch_minute);
 // extern int32_t k_goertzel;
@@ -633,7 +636,7 @@ void process_server_spp_from_computer(struct gecko_cmd_packet* evt,
 				index =
 						(uint32_t *) evt->data.evt_gatt_server_attribute_value.value.data;
 				printLog("Got request for data, len %d, idx: %ld\r\n", evt->data.evt_gatt_server_attribute_value.value.len, *index);
-				send_chunk(*index);
+				send_chunk(*index, chunk_offset);
 			} else {
 				printLog("Recevied the wrong number of bytes: %d/4\r\n", len);
 			}
@@ -666,7 +669,7 @@ void process_server_spp_from_computer(struct gecko_cmd_packet* evt,
 				index =
 						(uint32_t *) evt->data.evt_gatt_server_attribute_value.value.data;
 				// printLog("Got request for packet, len %d, idx: %ld\r\n", evt->data.evt_gatt_server_attribute_value.value.len, *index);
-				send_chunk(*index);
+				send_chunk(*index, chunk_offset);
 			} else {
 				printLog("Recevied the wrong number of bytes: %d/4\r\n", len);
 			}
