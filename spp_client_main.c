@@ -203,6 +203,7 @@ uint32_t encounter_count = 0;
 Encounter_record_v2 encounters[IDX_MASK+1];
 uint32_t c_fifo_last_idx=0;
 uint32_t p_fifo_last_idx=0;
+uint32_t chunk_offset = 0;
 
 // storage related
 bool write_flash = false;
@@ -392,6 +393,18 @@ static void send_upload_id() {
 //	}
 }
 
+void mark_flash_with_upload() {
+	printLog("Upload finished start_upload: %lu\r\n", _encounters_tracker.start_upload);
+	if (_encounters_tracker.start_upload==encounter_count) {
+		// mark flash
+		printLog("%lu: before mark tracker: %lu, count %lu\r\n",ts_ms(), _encounters_tracker.start_upload, encounter_count);
+		store_special_mark(4);
+		printLog("%lu: after mark tracker: %lu, count %lu\r\n",ts_ms(),  _encounters_tracker.start_upload, encounter_count);
+		_encounters_tracker.start_upload = encounter_count;
+	}
+
+}
+
 static void send_upload_data() {
 	uint16 result;
 	// int len = 192;
@@ -428,14 +441,7 @@ static void send_upload_data() {
 	}
 	if (done) {
 		_main_state = FINISHED_UPLOAD;
-		printLog("Upload finished start_upload: %lu\r\n", _encounters_tracker.start_upload);
-		if (_encounters_tracker.start_upload==encounter_count) {
-			// mark flash
-			printLog("%lu: before mark tracker: %lu, count %lu\r\n",ts_ms(), _encounters_tracker.start_upload, encounter_count);
-			store_special_mark(4);
-			printLog("%lu: after mark tracker: %lu, count %lu\r\n",ts_ms(),  _encounters_tracker.start_upload, encounter_count);
-			_encounters_tracker.start_upload = encounter_count;
-		}
+		// mark_flash_with_upload();
 	}
 
 }
@@ -547,6 +553,28 @@ void parse_bt_command(uint8_t c) {
         sending_ota = false;
         break;
 	}
+	case 'g': {
+		uint32_t ts = ts_ms();
+		send_ota_uint32(_encounters_tracker.start_upload);
+		printLog("%lu  sent encounter last uploaded: %lu", ts, _encounters_tracker.start_upload);
+		break;
+	}
+	case 'G': {
+		uint32_t ts = ts_ms();
+		chunk_offset = _encounters_tracker.start_upload;
+		printLog("%lu  set chunk_offset to encounter_tracker.start_upload: %lu\r\n", ts, chunk_offset);
+		break;
+	}
+	case 'Z': {
+		uint32_t ts = ts_ms();
+		chunk_offset = 0;
+		printLog("%lu  set chunk_offset to: %lu\r\n", ts, chunk_offset);
+		break;
+	}
+	case 'Y': {
+		mark_flash_with_upload();
+		break;
+	}
 	case 't':{
 		printLog("mode: send data turbo\r\n");
 		// SLEEP_SleepBlockBegin(sleepEM2); // Disable sleeping
@@ -569,9 +597,11 @@ void parse_bt_command(uint8_t c) {
 		uint32_t epoch_minute = em(ts_ms());
 		int index = search_encounters_em(epoch_minute-search_history);
 		printLog("c_fifo_last_idx: %lu index:%d\r\n", c_fifo_last_idx, index);
-		for (int i = c_fifo_last_idx-1; i>=index; i--) {
-			printLog("send encounter history index: %d\r\n", i);
-			send_encounter(i);
+		if (index >= 0) {
+			for (int i = c_fifo_last_idx - 1; i >= index; i--) {
+				printLog("send encounter history index: %d\r\n", i);
+				send_encounter(i);
+			}
 		}
 		send_encounter(0xFFFFFFFF);
 		break;
@@ -601,13 +631,14 @@ void parse_bt_command(uint8_t c) {
 	case 'I':{
 		uint8_t value=0;
 
-		if (write_flash) {
-			value = 1;
-			if (mark_set) {
-				value = 3;
-			}
-		}
-		send_ota_uint8(value);
+//		if (write_flash) {
+//			value = 1;
+//			if (mark_set) {
+//				value = 3;
+//			}
+//		}
+//		send_ota_uint8(value);
+		send_ota_uint8(_status);
 		printLog("sent write_flash value: %d\r\n", value);
 		break;
 	}
@@ -632,8 +663,12 @@ void parse_bt_command(uint8_t c) {
 	}
 	case 'A': {
 		uint32_t ts = ts_ms();
-		send_ota_uint32(ts);
-		send_ota_uint32(_time_info.time_overflow);
+		uint32_t temp[2];
+		temp[0] = ts;
+		temp[1] =_time_info.time_overflow;
+		send_ota_array((uint8_t *)temp, 8);
+//		send_ota_uint32(ts);
+//		send_ota_uint32(_time_info.time_overflow);
 		printLog("ts, overflow: %ld, %ld\r\n", ts, _time_info.time_overflow);
 		break;
 	}
@@ -691,6 +726,8 @@ void parse_bt_command(uint8_t c) {
 		timedata = (uint32_t *) gecko_cmd_gatt_server_read_attribute_value(gattdb_gatt_spp_data,0 )->value.data;
 		uint8_t len = gecko_cmd_gatt_server_read_attribute_value(gattdb_gatt_spp_data,0 )->value.len;
         printLog("In O, got %d bytes, ts: %ld\r\n", len, ts);
+    	printLog("timedata: %ld, %ld, %ld\r\n", timedata[0], timedata[1], timedata[2]);
+
         sync_clock(ts, timedata);
 
 		_status &= ~(1<<2); // clear clock not set bit
@@ -1573,7 +1610,7 @@ void spp_client_main(void) {
 						// pdm_start();
 						// pdm_on = true;
 					} else {
-						// printLog("SPP Mode OFF\r\n");
+						printLog("SPP Mode OFF\r\n");
 						_main_state = STATE_CONNECTED;
 						SLEEP_SleepBlockEnd(sleepEM2); // Enable sleeping
 					}
@@ -1652,7 +1689,7 @@ void spp_client_main(void) {
 						index =
 								(uint32_t *) evt->data.evt_gatt_server_attribute_value.value.data;
 						// printLog("Got request for packet, len %d, idx: %ld\r\n", evt->data.evt_gatt_server_attribute_value.value.len, *index);
-						send_chunk(*index);
+						send_chunk(*index, chunk_offset);
 					} else {
 						printLog("Recevied the wrong number of bytes: %d/4\r\n",
 								len);
