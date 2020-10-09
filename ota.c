@@ -18,9 +18,17 @@
 extern uint8 _min_packet_size;
 extern uint8 _conn_handle;
 extern uint32_t encounter_count;
+extern uint32_t chunk_offset;
 /* end globals **************/
 
+void send_ota_array(uint8_t *data, uint8_t len) {
+	uint16 result;
+	printLog("Try to send_ota_array len: %d\r\n", len);
+	do {
+		result = gecko_cmd_gatt_server_send_characteristic_notification(_conn_handle, gattdb_gatt_spp_data, len, data)->result;
+	} while(result == bg_err_out_of_memory);
 
+}
 void send_ota_msg(char *msg) {
 	uint32_t len = strlen(msg);
 	uint16 result;
@@ -49,9 +57,9 @@ void send_ota_uint8(uint8_t data) {
 	} while(result == bg_err_out_of_memory);
 }
 
-void send_chunk(uint32_t index) {
+void send_chunk(uint32_t index, uint32_t offset) {
 	uint32_t max;
-	uint32_t len = encounter_count<<5;
+	uint32_t len = (encounter_count-offset)<<5;
 	uint8 data[256];
 	uint16 result;
 	int chunk_size = _min_packet_size - 4;
@@ -78,7 +86,7 @@ void send_chunk(uint32_t index) {
 			if (xfer_len==0) xfer_len=chunk_size;
 		}
 		// Figure out starting point in memory
-		uint32_t addr = chunk_size*index;
+		uint32_t addr = chunk_size*index + (offset<<5);
 		do {
 			xfer_len += 4;  // Add length of packet number
 			//int32_t retCode =
