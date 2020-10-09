@@ -116,7 +116,7 @@ void find_mark_in_flash(uint8_t mark) {
 	} while (!found & (count >= 0));
 	printLog("done: find_mark_in_flash: %d\r\n", count);
 
-	_encounters_tracker.start_upload = ++count;
+	_encounters_tracker.start_upload = ++count;  // first element after mark
 }
 
 //void test_write_flash() {
