@@ -79,7 +79,7 @@
 #define SEND_ID		(true)
 
 const char *version_str = "Version: " __DATE__ " " __TIME__;
-const char *ota_version = "2.0";
+const char *ota_version = "2.0.4b";
 
 
 // SPP service UUID: 4880c12c-fdcb-4077-8920-a450d7f9b907
@@ -441,7 +441,7 @@ static void send_upload_data() {
 	}
 	if (done) {
 		_main_state = FINISHED_UPLOAD;
-		// mark_flash_with_upload();
+		mark_flash_with_upload();
 	}
 
 }
@@ -674,9 +674,13 @@ void parse_bt_command(uint8_t c) {
 	}
 	case 'a': {
 		printLog("Send ota time info\r\n");
-		send_ota_uint32(_time_info.epochtimesync);
-		send_ota_uint32(_time_info.offset_time);
-		send_ota_uint32(_time_info.offset_overflow);
+		uint32_t temp[3] = {_time_info.epochtimesync,
+				_time_info.offset_time,
+				_time_info.offset_overflow };
+		send_ota_array((uint8_t *)temp, 12);
+//		send_ota_uint32(_time_info.epochtimesync);
+//		send_ota_uint32(_time_info.offset_time);
+//		send_ota_uint32(_time_info.offset_overflow);
 		break;
 	}
 	case 'C': {
