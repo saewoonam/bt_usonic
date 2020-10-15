@@ -72,6 +72,7 @@ void update_next_minute(void) {
 		_time_info.next_minute +=ENCOUNTER_PERIOD;
 	}
 	set_new_mac_address();
+	update_public_key();
 
 	//  Change stuff daily... if desired.
 	if (day==0) {

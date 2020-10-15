@@ -79,7 +79,7 @@
 #define SEND_ID		(true)
 
 const char *version_str = "Version: " __DATE__ " " __TIME__;
-const char *ota_version = "2.0.4b";
+const char *ota_version = "2.0.5";
 
 
 // SPP service UUID: 4880c12c-fdcb-4077-8920-a450d7f9b907
@@ -394,15 +394,12 @@ static void send_upload_id() {
 }
 
 void mark_flash_with_upload() {
-	printLog("Upload finished start_upload: %lu\r\n", _encounters_tracker.start_upload);
-	if (_encounters_tracker.start_upload==encounter_count) {
-		// mark flash
-		printLog("%lu: before mark tracker: %lu, count %lu\r\n",ts_ms(), _encounters_tracker.start_upload, encounter_count);
-		store_special_mark(4);
-		printLog("%lu: after mark tracker: %lu, count %lu\r\n",ts_ms(),  _encounters_tracker.start_upload, encounter_count);
-		_encounters_tracker.start_upload = encounter_count;
-	}
-
+	// mark flash
+	printLog("%lu: before mark tracker: %lu, count %lu\r\n",ts_ms(), _encounters_tracker.start_upload, encounter_count);
+	store_special_mark(4);
+	//printLog("%lu: after mark tracker: %lu, count %lu\r\n",ts_ms(),  _encounters_tracker.start_upload, encounter_count);
+	_encounters_tracker.start_upload = encounter_count;
+	printLog("%lu: after mark tracker: %lu, count %lu\r\n",ts_ms(),  _encounters_tracker.start_upload, encounter_count);
 }
 
 static void send_upload_data() {
@@ -441,7 +438,11 @@ static void send_upload_data() {
 	}
 	if (done) {
 		_main_state = FINISHED_UPLOAD;
-		mark_flash_with_upload();
+		printLog("Upload finished start_upload: %lu\r\n",
+				_encounters_tracker.start_upload);
+		if (_encounters_tracker.start_upload == encounter_count) {
+			mark_flash_with_upload();
+		}
 	}
 
 }
@@ -556,7 +557,7 @@ void parse_bt_command(uint8_t c) {
 	case 'g': {
 		uint32_t ts = ts_ms();
 		send_ota_uint32(_encounters_tracker.start_upload);
-		printLog("%lu  sent encounter last uploaded: %lu", ts, _encounters_tracker.start_upload);
+		printLog("%lu  sent encounter last uploaded: %lu\r\n", ts, _encounters_tracker.start_upload);
 		break;
 	}
 	case 'G': {
@@ -872,7 +873,7 @@ void parse_command(uint8_t c) {
 }
 
 int IQR(int16_t* a, int n, int *mid_index);
-// #define PRINT_ENCOUNTER_DETAIL
+#define PRINT_ENCOUNTER_DETAIL
 void print_encounter(int index) {
 	Encounter_record_v2 *e;
 	e = encounters+index;
