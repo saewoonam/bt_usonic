@@ -175,13 +175,18 @@ void store_event(uint8_t *event) {
     CORE_EXIT_ATOMIC(); // Enable interrupts
 }
 
-void store_time() {
+//void store_time() {
+void store_time(uint8_t *data, uint8_t len) {
     uint8_t time_evt[32];
 	memset(time_evt, 0, 32);
 	memcpy(time_evt+4, &_time_info.epochtimesync, 4);
 	memcpy(time_evt+8, &_time_info.offset_time, 4);
 	memcpy(time_evt+12, &_time_info.offset_overflow, 4);
 	memset(time_evt+16, 0xFF, 16);
+	if (len>0) {
+		if (len>16) len=16;
+		memcpy(time_evt+16, data, len);
+	}
 	/*
 	_time_info.gottime = true;
 	_time_info.epochtimesync = epochtimesync;
@@ -282,7 +287,8 @@ void set_name(uint8_t *name) {
 	printLog("name: %s\r\n", buffer);
 	*/
 }
-void start_writing_flash() {
+//void start_writing_flash() {
+void start_writing_flash(uint8_t *data, uint8_t len) {
 	write_flash = true;
 	p_fifo_last_idx = c_fifo_last_idx;
 	printLog("Start writing to flash\r\n");
@@ -293,7 +299,9 @@ void start_writing_flash() {
 	// if (mode==MODE_ENCOUNTER) {
 		store_event(blank);
 	// }
-	store_time();
+	//store_time();
+	store_time(data, len);
+
 }
 
 void flash_store(void) {

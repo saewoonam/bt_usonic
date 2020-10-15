@@ -79,7 +79,7 @@
 #define SEND_ID		(true)
 
 const char *version_str = "Version: " __DATE__ " " __TIME__;
-const char *ota_version = "2.0.5";
+const char *ota_version = "2.0.6";
 
 
 // SPP service UUID: 4880c12c-fdcb-4077-8920-a450d7f9b907
@@ -147,7 +147,9 @@ void send_encounter(uint32_t index);
 void process_ext_signals(uint32_t signals);
 void process_server_spp_from_computer(struct gecko_cmd_packet* evt, bool sending_ota, bool sending_turbo);
 
-void start_writing_flash();
+// void start_writing_flash();
+void start_writing_flash(uint8_t *data, uint8_t len);
+
 // void store_event(uint8_t *event);
 void flash_erase();
 void determine_counts(uint32_t flash_size);
@@ -646,7 +648,12 @@ void parse_bt_command(uint8_t c) {
 	case 'w':{
 		if (!write_flash) {
 			_status |= 0x01;
-			start_writing_flash();
+			uint8_t *data = gecko_cmd_gatt_server_read_attribute_value(gattdb_gatt_spp_data,0 )->value.data;
+			uint8_t len = gecko_cmd_gatt_server_read_attribute_value(gattdb_gatt_spp_data,0 )->value.len;
+
+			start_writing_flash(data, len);
+
+			// start_writing_flash();
 		}
         break;
 	}
@@ -1525,7 +1532,7 @@ void spp_client_main(void) {
 					printLog("%lu: Not near hotspot, start writing %lu\r\n", ts_ms(), _time_info.near_hotspot_time);
 					write_flash = true;
 					_status |= 0x01;
-					start_writing_flash();
+					start_writing_flash(0, 0);
 					update_counts_status();
 				}
 				// Start writing
