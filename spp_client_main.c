@@ -267,7 +267,7 @@ static uint16_t beep_period = 880;
 // bit 0:  save to flash
 // bit 1:  mark
 // bit 2:  no clock
-// bit 3:  RAW mode (not used in this firmware)
+// bit 3:  CAL/RAW mode
 uint8 _status = 1<<2;  // start with clock not set bit
 
 static bool _update_minute_after_upload = false;
@@ -622,7 +622,7 @@ void parse_bt_command(uint8_t c) {
 		write_flash = false;
 		_status |= (1 << 3); // set data collection mode to raw
 		update_counts_status();
-		printLog("Set to mode to RAW\r\n");
+		printLog("Set to mode to CAL/RAW\r\n");
 		break;
 	}
 //	case 'm':{
@@ -969,6 +969,8 @@ void alarm_finished(void) {
 }
 //#define DEBUG_SHAREDCOUNT
 
+void store_zeros_random_addr(uint32_t address);
+
 void spp_client_main(void) {
 #ifdef DEBUG_SHAREDCOUNT
 	uint32_t prev_shared_count = 0;
@@ -1022,6 +1024,8 @@ void spp_client_main(void) {
 					  _encounters_tracker.start_upload);
 			  // _encounters_tracker.start_upload = 0;
 			  read_name_ps();
+			  // printLog("store zeros at 2\r\n");
+			  // store_zeros_random_addr(2);
 
 			// ***************
 			reset_variables();
@@ -1526,16 +1530,19 @@ void spp_client_main(void) {
 			readBatteryLevel();
 //			if ( (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD)) &&
 //					(_client_type == CLIENT_IS_BTDEV) ) {
-			if (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD))  {
-				_near_hotspot = false;
-				if ((!write_flash) && !(_status & (1 << 2))) {
-					printLog("%lu: Not near hotspot, start writing %lu\r\n", ts_ms(), _time_info.near_hotspot_time);
-					write_flash = true;
-					_status |= 0x01;
-					start_writing_flash(0, 0);
-					update_counts_status();
+			if ((_status & (1 << 3))==0) {
+				if (ts > (_time_info.near_hotspot_time + ENCOUNTER_PERIOD)) {
+					_near_hotspot = false;
+					if ((!write_flash) && !(_status & (1 << 2))) {
+						printLog("%lu: Not near hotspot, start writing %lu\r\n",
+								ts_ms(), _time_info.near_hotspot_time);
+						write_flash = true;
+						_status |= 0x01;
+						start_writing_flash(0, 0);
+						update_counts_status();
+					}
+					// Start writing
 				}
-				// Start writing
 			}
 			switch (evt->data.evt_hardware_soft_timer.handle) {
 			case HANDLE_CONNECTION_TIMEOUT_TIMER:

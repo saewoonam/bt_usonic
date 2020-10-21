@@ -151,9 +151,25 @@ void flash_erase() {
 	// printLog("verify erased: %d\r\n", empty);
 }
 
+int32_t storage_writeRaw_noCheck(uint32_t address, uint8_t *data, size_t numBytes);
+
+void store_zeros_random_addr(uint32_t address) {
+	uint8_t temp[32];
+	memset(temp, 0, 32);
+	int32_t retCode = storage_writeRaw_noCheck(address<<5, temp, 32);
+	/*for (int i=0; i<32; i++) {
+		printLog("%02X ", event[i]);
+	}
+	printLog("\r\n");*/
+	if (retCode) {
+		printLog("Error storing zeros to flash at addr %ld: %ld\r\n", address, retCode);
+	}
+
+}
+
 void store_event(uint8_t *event) {
-    CORE_DECLARE_IRQ_STATE;
-    CORE_ENTER_ATOMIC();
+//    CORE_DECLARE_IRQ_STATE;
+//    CORE_ENTER_ATOMIC();
 
 	if (encounter_count<(1<<(20-5))) {
 		int32_t retCode = storage_writeRaw(encounter_count<<5, event, 32);
@@ -172,7 +188,7 @@ void store_event(uint8_t *event) {
 		/* Need to indicate that memory is full */
 		;
 	}
-    CORE_EXIT_ATOMIC(); // Enable interrupts
+//    CORE_EXIT_ATOMIC(); // Enable interrupts
 }
 
 //void store_time() {

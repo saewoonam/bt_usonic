@@ -510,6 +510,44 @@ int32_t storage_readRaw(uint32_t address, uint8_t *data, size_t length)
   return BOOTLOADER_OK;
 }
 
+int32_t storage_writeRaw_noCheck(uint32_t address, uint8_t *data, size_t numBytes)
+{
+  uint32_t nextPageAddr;
+  uint32_t currentLength;
+
+  // Ensure address is is within chip
+  if (!verifyAddressRange(address, numBytes, NULL)) {
+    return BOOTLOADER_ERROR_STORAGE_INVALID_ADDRESS;
+  }
+  // skip this
+//  // Ensure space is empty
+//  if (!verifyErased(address, numBytes)) {
+//    return BOOTLOADER_ERROR_STORAGE_NEEDS_ERASE;
+//  }
+
+  if (address & DEVICE_PAGE_MASK) {
+    // handle unaligned first block
+    nextPageAddr = (address & (~DEVICE_PAGE_MASK)) + DEVICE_PAGE_SIZE;
+    if ((address + numBytes) < nextPageAddr) {
+      // fits all within first block
+      currentLength = numBytes;
+    } else {
+      currentLength = (uint16_t) (nextPageAddr - address);
+    }
+  } else {
+    currentLength = (numBytes > DEVICE_PAGE_SIZE) ? DEVICE_PAGE_SIZE : numBytes;
+  }
+  while (numBytes) {
+    writePage(address, data, currentLength);
+    numBytes -= currentLength;
+    address += currentLength;
+    data += currentLength;
+    currentLength = (numBytes > DEVICE_PAGE_SIZE) ? DEVICE_PAGE_SIZE : numBytes;
+  }
+
+  return BOOTLOADER_OK;
+}
+
 int32_t storage_writeRaw(uint32_t address, uint8_t *data, size_t numBytes)
 {
   uint32_t nextPageAddr;
