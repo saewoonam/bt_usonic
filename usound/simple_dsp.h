@@ -28,6 +28,7 @@ void filter_biquad(int16_t *x, uint8_t filter);
 int shape(int16_t* x);
 int width(int16_t* x, int max_idx, float thresh, int *mid);
 void shape_v2(int16_t* x, int16_t *max, int *max_idx);
+void shape_v3(int16_t* x, int16_t *max, int *max_idx);
 
 int IQR(int16_t* a, int n, int *mid_index);
 uint64_t code_lsfr(int seed, int polynomial, int length, int *N, uint16_t *pw, int8_t *chirp );

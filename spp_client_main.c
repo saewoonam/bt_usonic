@@ -180,7 +180,7 @@ int32_t k_calibrate = -1;
 uint8_t k_speaker_offsets[12];
 uint8_t k_goertzel_offsets[12];
 
-float pulse_width = 1.0e-3;
+float pulse_width = 2.0e-3;
 int out=0;
 bool distant=false;
 
@@ -252,7 +252,7 @@ uint8_t local_mac[6];
 /* Default maximum packet size is 20 bytes. This is adjusted after connection is opened based
  * on the connection parameters */
 
-volatile int conn_interval = 64; //64
+volatile int conn_interval = 96; //64
 Encounter_record_v2 *current_encounter = encounters;
 static int8  _rssi_count = 0;
 static int8 search_history = 10;
@@ -880,7 +880,7 @@ void parse_command(uint8_t c) {
 }
 
 int IQR(int16_t* a, int n, int *mid_index);
-#define PRINT_ENCOUNTER_DETAIL
+//#define PRINT_ENCOUNTER_DETAIL
 void print_encounter(int index) {
 	Encounter_record_v2 *e;
 	e = encounters+index;
@@ -1060,7 +1060,7 @@ void spp_client_main(void) {
 					disable_encounter = false;
 					break;
 				}
-				if (response > 0) printLog("%lu: response %d\r\n", ts_ms(), response);
+				// if (response > 0) printLog("%lu: response %d\r\n", ts_ms(), response);
 				if (response>0) {
 					struct gecko_msg_le_gap_connect_rsp_t *pResp;
 					if (response==2) {

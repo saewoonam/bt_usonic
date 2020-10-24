@@ -317,7 +317,7 @@ void shape_v2(int16_t* x, int16_t *max, int *max_idx) {
 	float a1, a2, b0, b1, b2;
 //    int max = 0;
 //    int max_idx = 0;
-    float mean = 0;
+//    float mean = 0;
 
     // low pass filter to integrate
 		a1 = -1.91118480;
@@ -331,14 +331,14 @@ void shape_v2(int16_t* x, int16_t *max, int *max_idx) {
 		delay1 = b1 * x[i] - a1 * y + delay2;
 		delay2 = b2 * x[i] - a2 * y;
 		x[i] = (int) y; // put result back in place
-		mean += y;
+//		mean += y;
 		if (x[i]> *max) {
 			*max = x[i];
 			*max_idx = i;
 			// printLog("search %d %d\r\n", *max, *max_idx);
 		}
 	}
-	printLog("max, max_idx: %d %d\r\n", *max, *max_idx);
+	//printLog("max, max_idx: %d %d\r\n", *max, *max_idx);
 	// check for max close in time
 	if (*max_idx>300) {
 		// printLog("Look for second peak sooner than %d\r\n", *max_idx);
@@ -346,7 +346,7 @@ void shape_v2(int16_t* x, int16_t *max, int *max_idx) {
 		int idx2 = 0;
 		int pk2_idx = 0;
 		int offset = pulse_width*1000*100;
-		printLog("offset: %d\r\n", offset);
+		// printLog("offset: %d\r\n", offset);
 		find_max(x, *max_idx-offset, &max2, &idx2);
 		int w = width(x, idx2, 0.5, &pk2_idx); // do we need this?
 		int thresh = *max * 0.2;
@@ -357,13 +357,107 @@ void shape_v2(int16_t* x, int16_t *max, int *max_idx) {
 			// replace with earlier peak
 			*max_idx = idx2;
 			*max = max2;
+			printLog("use earlier peak\r\n");
 		} else {
 			;
 		}
-		printLog("peak2 idx: %d, max value: %d, width: %d pk2_idx:%d\r\n", idx2, max2, w, pk2_idx);
+		// printLog("peak2 idx: %d, max value: %d, width: %d pk2_idx:%d\r\n", idx2, max2, w, pk2_idx);
 	}
+	printLog("max, max_idx: %d %d\r\n", *max, *max_idx);
+
 }
 
+void shape_v3(int16_t* x, int16_t *max, int *max_idx) {
+	for (int i = 0; i < BUFFER_SIZE; i++) {
+		x[i] = fabs(x[i]);
+	}
+	// printLog("Shape_v2\r\n");
+	float y;
+	float delay1 = 0;
+	float delay2 = 0;
+	float a1, a2, b0, b1, b2;
+
+    int start, stop;
+    int threshold = 3;
+    float influence = 0.2;
+    int decimate = 16;
+    uint16_t filteredY;
+    uint16_t filteredY_prev;
+    float avgFilter;
+    float stdFilter = 0;
+    bool high = false;
+    uint16_t pk = 0;
+    int pk_idx = -1;
+    uint16_t local_pk = 0;
+    int local_pk_idx = -1;
+
+
+//    int max = 0;
+//    int max_idx = 0;
+//    float mean = 0;
+
+	// low pass filter to integrate
+	a1 = -1.91118480;
+	a2 = 0.91496354;
+	b0 = 9.44685778e-4;
+	b1 = 0.00188937;
+	b2 = 9.44685778e-4;
+
+	for (int i=0; i< BUFFER_SIZE; i++) {
+		y = b0 * x[i] + delay1;
+		delay1 = b1 * x[i] - a1 * y + delay2;
+		delay2 = b2 * x[i] - a2 * y;
+		x[i] = (int) y; // put result back in place
+
+	    if (i==0) {
+	        filteredY = x[0];
+	        filteredY_prev = x[0];
+	        avgFilter = x[0];
+	    }
+	    if ((i%decimate)==0) {
+	        uint16_t temp = filteredY;
+	        if ((x[i] - avgFilter) > (threshold * stdFilter)) {
+	            if (!high) {
+	                high = true;
+	                start = i;
+	            }
+	            if (x[i] > local_pk) {
+	                local_pk = x[i];
+	                local_pk_idx = i;
+	            }
+	            filteredY = influence * x[i] + (1 - influence) * filteredY_prev;
+	        } else {
+	            //  check if transition from high to low
+	            if (high) {
+	                high = false;
+	                stop = i;
+	                //  Long enough to be a peak
+	                if ((stop-start)>4) {
+	                    if (local_pk > 2*pk) {
+	                        pk = local_pk;
+	                        pk_idx = local_pk_idx;
+	                    }
+	                }
+	                //  reset local peak info
+	                local_pk = 0;
+	                local_pk_idx = -1;
+	            }
+	            // update filteredY
+	            filteredY = x[i];
+	        }
+	        filteredY_prev = temp;
+	        avgFilter = (filteredY + filteredY_prev)/2;
+
+	        stdFilter = (filteredY > filteredY_prev) ? (filteredY - filteredY_prev):
+	            (filteredY_prev - filteredY);
+	        stdFilter /= 2;
+	    }
+	}
+	*max = pk;
+	*max_idx = pk_idx;
+	printLog("max, max_idx: %d %d\r\n", *max, *max_idx);
+
+}
 
 // from https://www.geeksforgeeks.org/interquartile-range-iqr/
 // Function to give index of the median

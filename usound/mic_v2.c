@@ -41,7 +41,7 @@ bool prevBufferPing;
 unsigned int ldma_channelPDM;
 bool recording = false;
 
-bool _compute_all = true;
+bool _compute_all = false;
 
 // end PDM stuff
 #define RECORD_TX
@@ -271,7 +271,7 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 				int16_t l_pk = 0;
 				int16_t r_pk = 0;
 				// int l_t = shape(corr);
-				shape_v2(corr, &l_pk, &l_t);
+				shape_v3(corr, &l_pk, &l_t);
 //				curr = RTCC_CounterGet();
 //				printf("%ld, %ld, %ld, **** shape_v2\r\n",
 //						curr, curr-prev_rtcc, curr-t0);
@@ -288,7 +288,7 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 				// int r_t = shape(corr);
 				if (out == 3)
 					dump_array((uint8_t *) corr, BUFFER_SIZE << 1);
-				shape_v2(corr, &r_pk, &r_t);
+				shape_v3(corr, &r_pk, &r_t);
 				// int right_w = width(corr, r_t, 0.5, &p2_r);
 				if (out == 2)
 					dump_array((uint8_t *) corr, BUFFER_SIZE << 1);
@@ -318,8 +318,8 @@ bool pdm_dma_cb(unsigned int channel, unsigned int sequenceNo, void *userParam) 
 				_data_idx++;
 				prev_rtcc = curr;
 			} else {
-				if (out > 0) printLog("DATA 0\r\n");
-				if (out > 0) printLog("DATA 0\r\n");
+				if (out > 0) printLog("DATA 0 %ld\r\n", k_goertzel);
+				if (out > 0) printLog("DATA 0 %ld\r\n", k_goertzel);
 //				int l_t = 0;
 //				int r_t = 0;
 //				insert(l_t, left_t);
