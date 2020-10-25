@@ -180,7 +180,7 @@ int32_t k_calibrate = -1;
 uint8_t k_speaker_offsets[12];
 uint8_t k_goertzel_offsets[12];
 
-float pulse_width = 2.0e-3;
+float pulse_width = 1.0e-3;
 int out=0;
 bool distant=false;
 
@@ -249,6 +249,7 @@ static int pre_beep_state = -1;
 
 static int8 _role = ROLE_UNKNOWN;
 uint8_t local_mac[6];
+bool debug_add_name = true;
 /* Default maximum packet size is 20 bytes. This is adjusted after connection is opened based
  * on the connection parameters */
 
@@ -546,6 +547,16 @@ void read_serial(uint8_t *buf, int len) {
 
 void parse_bt_command(uint8_t c) {
 	switch (c) {
+	case 'd':{
+		printLog("add name to encounter id\r\n");
+        debug_add_name = true;
+        break;
+	}
+	case 'D':{
+		printLog("standard encounter id\r\n");
+        debug_add_name = false;
+        break;
+	}
 	case 'f':{
 		printLog("mode: send data ota\r\n");
         sending_ota = true;
@@ -880,7 +891,7 @@ void parse_command(uint8_t c) {
 }
 
 int IQR(int16_t* a, int n, int *mid_index);
-//#define PRINT_ENCOUNTER_DETAIL
+#define PRINT_ENCOUNTER_DETAIL
 void print_encounter(int index) {
 	Encounter_record_v2 *e;
 	e = encounters+index;
@@ -1160,7 +1171,7 @@ void spp_client_main(void) {
 						if (pResp->result == 0x181) {
 							gecko_cmd_le_connection_close(1);
 							printLog("Tried to close extra connections\r\n");
-							play_beep(1, 880, false);
+							//play_beep(1, 880, false);
 						}
 					}
 
@@ -1219,7 +1230,7 @@ void spp_client_main(void) {
 	        // printLog("open connection type: %d mac: ", evt->data.evt_le_connection_opened.address_type);
 	        // print_mac(evt->data.evt_le_connection_opened.address.addr);
 	        setup_encounter_record(evt->data.evt_le_connection_opened.address.addr);
-	        if (conn_interval <= 64) {
+	        if (conn_interval <= 100) {
 		        gecko_cmd_hardware_set_soft_timer(5 * 32768, HANDLE_CONNECTION_TIMEOUT_TIMER, true);
 
 	        } else {
@@ -1241,7 +1252,12 @@ void spp_client_main(void) {
 							current_encounter->public_key);
 					memcpy(current_encounter->public_key, shared_key, 32);
 					// turnoff speaker or microphone
-
+					if (debug_add_name) {
+						memcpy(current_encounter->public_key, gecko_cmd_gatt_server_read_attribute_value(
+								gattdb_device_name, 0)->value.data, 8);
+						memcpy(current_encounter->public_key+8, &_role, 1);
+						memset(current_encounter->public_key+9, 0, 1);
+					}
 					// printLog("client_type: %d, role: %d\r\n", _client_type, _role);
 					unlinkPRS();
 					if (pdm_on) {
