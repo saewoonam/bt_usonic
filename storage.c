@@ -43,6 +43,20 @@ external functions
 void update_counts_status(void);
 
 /***************************************************************************************************
+typedefs
+ **************************************************************************************************/
+
+typedef struct flash_buf_t flash_buf_t;
+typedef flash_buf_t* flash_handle_t;
+struct flash_buf_t {
+	uint32_t head;
+	uint32_t tail;
+	uint32_t max; //of the buffer
+	bool full;
+};
+struct flash_buf_t flash_buf;
+
+/***************************************************************************************************
  functions
  **************************************************************************************************/
 
@@ -88,7 +102,7 @@ int search_encounters_em(uint32_t epoch_minute) {
     return -1;
 }
 
-void determine_counts(uint32_t flash_size) {
+uint32_t determine_counts(uint32_t flash_size) {
 	uint32_t count=0;
 	bool empty=true;
 	// printf("flash_size<<5: %ld\r\n", (flash_size>>5));
@@ -97,11 +111,7 @@ void determine_counts(uint32_t flash_size) {
 		if (!empty) count++;
 		// printLog("count:%lu\r\n", count);
 	} while (!empty & (count<(flash_size>>5)));
-
-	encounter_count = count;
-	printLog("number of records: %ld\r\n", count);
-	update_counts_status();
-	//gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4, (const uint8*) &count);
+	return count;
 }
 
 bool verifyMark(uint32_t address, uint32_t len, uint8_t mark);
@@ -183,7 +193,6 @@ void store_event(uint8_t *event) {
 		encounter_count++;
 		printLog("Storing Encounter_count: %ld\r\n", encounter_count);
 		update_counts_status();
-		// gecko_cmd_gatt_server_write_attribute_value(gattdb_count, 0, 4, (const uint8*) &encounter_count);
 	} else {
 		/* Need to indicate that memory is full */
 		;
@@ -351,4 +360,91 @@ void flash_store(void) {
         }
     }
 }
+
+
+// inspired by https://github.com/embeddedartistry/embedded-resources/blob/master/examples/c/circular_buffer/circular_buffer.c
+
+void flash_buf_reset(flash_handle_t fbuf) {
+	fbuf->head = 0;
+	fbuf->tail = 0;
+	fbuf->full = false;
+}
+
+/*
+ *
+flash_handle_t flash_buf_init(size_t size) {
+	flash_handle_t fbuf = malloc(sizeof(struct flash_buf_t));
+ *
+ */
+void flash_buf_init(size_t size) {
+	flash_buf.max = size;
+	flash_buf_reset(&flash_buf);
+}
+
+static void advance_pointer(flash_handle_t fbuf) {
+	if (fbuf->full) {
+		// Handle full memory
+	} else {
+		fbuf->head = (fbuf->head + 1) % fbuf->max;
+		fbuf->full = (fbuf->head == fbuf->tail);
+	}
+}
+
+static void retreat_pointer(flash_handle_t fbuf) {
+	fbuf->full = false;
+	fbuf->tail = (fbuf->tail + 1) % fbuf->max;
+}
+
+bool flash_buf_empty(flash_handle_t fbuf) {
+	return (!fbuf->full && (fbuf->head == fbuf->tail));
+}
+
+void flash_buf_put(flash_handle_t fbuf, uint8_t *event) {
+	if (!fbuf->full) {
+		int32_t retCode = storage_writeRaw((fbuf->head) << 5, event, 32);
+		if (retCode) {
+			printLog("Error storing to flash %ld\r\n", retCode);
+		}
+		printLog("Storing Encounter_count: %ld\r\n", fbuf->head);
+		update_counts_status();
+		advance_pointer(fbuf);
+	} else {
+		//TODO handle this case properly
+		printLog("FIFO is full\r\n");
+	}
+}
+
+/* clear froom flash buffer... */
+void flash_buf_zero(flash_handle_t fbuf) {
+	if (!flash_buf_empty(fbuf)) {
+		store_zeros_random_addr(fbuf->tail);
+		retreat_pointer(fbuf);
+	}
+}
+
+void time_flash_scan_memory() {
+	uint32_t start = ts_ms();
+	int sum = 0;
+	for (int i=0; i<32768; i++) {
+		sum += verifyErased(i<<5, 32);
+	}
+	printLog("sum: %d, elapsed time: %ld\r\n", sum, ts_ms()-start);
+}
+/*
+uint32_t find_head(flash_handle_t fbuf, uint32_t early, uint32_t late) {
+	uint32_t first=0;
+	uint32_t last= (fbuf->max)>>6;  // look halfway across circular buffer
+
+	bool empty;
+	empty = verifyErased(first<<5, 32);
+	if (empty) return first; // need to look between last to first+ (fbuf->max)
+	empty = verifyErased(last<<5, 32); // need to look between first to last
+	if (empty) return last;
+
+	uint32_t mid = (first+last) >> 1;
+	if (verifyErased(mid<<5, 32)) return mid;
+
+
+}
+*/
 

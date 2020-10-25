@@ -152,7 +152,7 @@ void start_writing_flash(uint8_t *data, uint8_t len);
 
 // void store_event(uint8_t *event);
 void flash_erase();
-void determine_counts(uint32_t flash_size);
+uint32_t determine_counts(uint32_t flash_size);
 void read_name_ps(void);
 void set_name(uint8_t *name);
 // void read_encounters_tracking(void);
@@ -202,6 +202,8 @@ void setup_k() {
 struct my_encounter_index _encounters_tracker;
 // encounter related
 uint32_t encounter_count = 0;
+
+
 Encounter_record_v2 encounters[IDX_MASK+1];
 uint32_t c_fifo_last_idx=0;
 uint32_t p_fifo_last_idx=0;
@@ -414,7 +416,7 @@ static void send_upload_data() {
 //	for (int i=0; i<192; i++) {
 //		temp[i] = i;
 //	}
-	uint8_t chunk_size = 192;
+	uint8_t chunk_size = 192; //TODO adjust this based on MTU
 	if ((encounter_count - _encounters_tracker.start_upload) > 6) {
 		chunk_size = 192;
 	} else {
@@ -1025,18 +1027,24 @@ void spp_client_main(void) {
 			readBatteryLevel();
 			printLog("BatteryLevel %d\r\n", battBatteryLevel);
 
-			  int32_t flash_ret = storage_init();
-			  uint32_t flash_size = storage_size();
-			  printLog("storage_init: %ld %ld\r\n", flash_ret, flash_size);
-			  determine_counts(flash_size);
-			  // read_encounters_tracking();
-			  find_mark_in_flash(4);
-			  printLog("_encounters_tracker.start_upload: %lu\r\n",
-					  _encounters_tracker.start_upload);
-			  // _encounters_tracker.start_upload = 0;
-			  read_name_ps();
-			  // printLog("store zeros at 2\r\n");
-			  // store_zeros_random_addr(2);
+			int32_t flash_ret = storage_init();
+			uint32_t flash_size = storage_size();
+			printLog("storage_init: %ld %ld\r\n", flash_ret, flash_size);
+			encounter_count = determine_counts(flash_size);
+			printLog("number of records: %ld\r\n", encounter_count);
+			update_counts_status();
+
+			// read_encounters_tracking();
+			find_mark_in_flash(4);
+			printLog("_encounters_tracker.start_upload: %lu\r\n",
+					_encounters_tracker.start_upload);
+			// _encounters_tracker.start_upload = 0;
+			void time_flash_scan_memory();
+			time_flash_scan_memory();
+
+			read_name_ps();
+			// printLog("store zeros at 2\r\n");
+			// store_zeros_random_addr(2);
 
 			// ***************
 			reset_variables();
