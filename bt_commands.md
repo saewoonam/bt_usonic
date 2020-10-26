@@ -15,6 +15,8 @@
 
 - 'w': start storing encounters to flash
 - 's': stop storing encounters to flash
+- 'd': Use bluetooth device name + 2 bytes as first 10 bytes of encounter ID, 9th byte is whether the device was the master or slave during the encounter (master = 0, slave = 1) THIS IS DEFAULT
+- 'D': do not put device name in encounter id (reverse of 'd'
 
 - 'W': play alarm over speaker
 

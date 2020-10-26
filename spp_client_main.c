@@ -79,7 +79,7 @@
 #define SEND_ID		(true)
 
 const char *version_str = "Version: " __DATE__ " " __TIME__;
-const char *ota_version = "2.0.6";
+const char *ota_version = "2.0.7b";
 
 
 // SPP service UUID: 4880c12c-fdcb-4077-8920-a450d7f9b907
@@ -251,7 +251,7 @@ static int pre_beep_state = -1;
 
 static int8 _role = ROLE_UNKNOWN;
 uint8_t local_mac[6];
-bool debug_add_name = true;
+bool debug_add_name;
 /* Default maximum packet size is 20 bytes. This is adjusted after connection is opened based
  * on the connection parameters */
 
@@ -267,10 +267,11 @@ static int beep_count = 0;
 static uint16_t beep_period = 880;
 
 // _status
-// bit 0:  save to flash
-// bit 1:  mark
-// bit 2:  no clock
+// bit 0:  set when save to flash
+// bit 1:  set when mark
+// bit 2:  set when no clock
 // bit 3:  CAL/RAW mode
+// bit 4:  set when name in encounterID
 uint8 _status = 1<<2;  // start with clock not set bit
 
 static bool _update_minute_after_upload = false;
@@ -552,11 +553,13 @@ void parse_bt_command(uint8_t c) {
 	case 'd':{
 		printLog("add name to encounter id\r\n");
         debug_add_name = true;
+		_status |= (1 << 4); // set bit #4, name in encounter id
         break;
 	}
 	case 'D':{
 		printLog("standard encounter id\r\n");
         debug_add_name = false;
+		_status &= ~(1 << 4); // clear bit#4, std encounter id
         break;
 	}
 	case 'f':{
@@ -1017,6 +1020,9 @@ void spp_client_main(void) {
 		/* This boot event is generated when the system boots up after reset.
 		 * Here the system is set to start advertising immediately after boot procedure. */
 		case gecko_evt_system_boot_id:
+			if (debug_add_name) {
+				_status |= (1 << 4); // set bit #4, name in encounter id
+			}
 			get_local_mac();
 			printLog("Builtin mac: ");
 			print_mac(local_mac);
