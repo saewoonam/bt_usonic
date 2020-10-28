@@ -54,7 +54,7 @@ struct flash_buf_t {
 	uint32_t max; //of the buffer
 	bool full;
 };
-struct flash_buf_t flash_buf;
+flash_buf_t flash_buf;
 
 /***************************************************************************************************
  functions
@@ -429,6 +429,40 @@ void time_flash_scan_memory() {
 		sum += verifyErased(i<<5, 32);
 	}
 	printLog("sum: %d, elapsed time: %ld\r\n", sum, ts_ms()-start);
+}
+
+int coarse_search() {
+    int index = 0;
+    int N = 15; // 32768
+    index = 0;
+    // printLog("index: %d\r\n", index);
+    if (verifyErased(index<<5, 32)) return index;
+    index = (1<<(N-1));
+    // printLog("index: %d\r\n", index);
+    if (verifyErased(index<<5, 32)) return index;
+    for(int i=N-2; i>=0; i--) {
+        index = (1<<i);
+        for(int j=0; j<(1<<(N-1-i)); j++) {
+            // printLog("index: %d\r\n", index);
+            if (verifyErased(index<<5, 32)) return index;
+            index += (1<<(i+1));
+        }
+    }
+    return -1;
+}
+
+uint32_t fine_search(uint32_t left, uint32_t right) {
+  uint32_t mid, *a, *b;
+  // printf("%d %d\r\n", left, right);
+  a = &left;
+  b = &right;
+  do {
+    mid = (left+right) >> 1;
+    // printf("%d %d %d\r\n", left, right, mid);
+    if (verifyErased(mid<<5, 32)) *b = mid;
+    else *a = mid;
+  } while ((right-left)>1);
+  return right;
 }
 /*
 uint32_t find_head(flash_handle_t fbuf, uint32_t early, uint32_t late) {

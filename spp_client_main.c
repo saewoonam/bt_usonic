@@ -79,7 +79,7 @@
 #define SEND_ID		(true)
 
 const char *version_str = "Version: " __DATE__ " " __TIME__;
-const char *ota_version = "2.0.7b";
+const char *ota_version = "2.0.7c";
 
 
 // SPP service UUID: 4880c12c-fdcb-4077-8920-a450d7f9b907
@@ -153,6 +153,9 @@ void start_writing_flash(uint8_t *data, uint8_t len);
 // void store_event(uint8_t *event);
 void flash_erase();
 uint32_t determine_counts(uint32_t flash_size);
+int coarse_search();
+uint32_t fine_search(uint32_t left, uint32_t right);
+
 void read_name_ps(void);
 void set_name(uint8_t *name);
 // void read_encounters_tracking(void);
@@ -554,12 +557,14 @@ void parse_bt_command(uint8_t c) {
 		printLog("add name to encounter id\r\n");
         debug_add_name = true;
 		_status |= (1 << 4); // set bit #4, name in encounter id
+		update_counts_status();
         break;
 	}
 	case 'D':{
 		printLog("standard encounter id\r\n");
         debug_add_name = false;
 		_status &= ~(1 << 4); // clear bit#4, std encounter id
+		update_counts_status();
         break;
 	}
 	case 'f':{
@@ -1036,8 +1041,23 @@ void spp_client_main(void) {
 			int32_t flash_ret = storage_init();
 			uint32_t flash_size = storage_size();
 			printLog("storage_init: %ld %ld\r\n", flash_ret, flash_size);
-			encounter_count = determine_counts(flash_size);
-			printLog("number of records: %ld\r\n", encounter_count);
+			uint32_t start_time, stop_time;
+//			start_time = ts_ms();
+//			encounter_count = determine_counts(flash_size);
+//			stop_time = ts_ms();
+//			printLog("number of records: %ld, %ld\r\n", encounter_count, stop_time-start_time);
+			start_time = ts_ms();
+			int right = coarse_search();
+			int left;
+			// printLog("right: %d\r\n", right);
+			if (right>0) {
+				left = right - (right & (-right));
+				encounter_count = fine_search(left, right);
+				stop_time = ts_ms();
+				printLog("search result: %ld  %ld\r\n", encounter_count, stop_time-start_time);
+			} else {
+				encounter_count = 0;
+			}
 			update_counts_status();
 
 			// read_encounters_tracking();
@@ -1045,8 +1065,8 @@ void spp_client_main(void) {
 			printLog("_encounters_tracker.start_upload: %lu\r\n",
 					_encounters_tracker.start_upload);
 			// _encounters_tracker.start_upload = 0;
-			void time_flash_scan_memory();
-			time_flash_scan_memory();
+			// void time_flash_scan_memory();
+			// time_flash_scan_memory();
 
 			read_name_ps();
 			// printLog("store zeros at 2\r\n");
